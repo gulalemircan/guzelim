@@ -1,26 +1,44 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+@theme {
+  --color-background: var(--theme-bg);
+  --color-card: var(--theme-card);
+  --color-primary: var(--theme-primary);
+  --color-secondary: var(--theme-secondary);
+  --color-accent: var(--theme-accent);
+  --color-text: var(--theme-text);
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
+@layer base {
+  /* 1. BORDO & ALTIN */
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --theme-bg: #3b171f; 
+    --theme-card: #4a1f28; 
+    --theme-primary: #c5a059; 
+    --theme-secondary: #a88544; 
+    --theme-accent: #c5a059;
+    --theme-text: #fdfbf7; 
   }
-}
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  /* 2. KOYU SİYAH & BEYAZ */
+  :root[data-theme="koyu-siyah"] {
+    --theme-bg: #0a0a0a; 
+    --theme-card: #171717; 
+    --theme-primary: #ffffff; 
+    --theme-secondary: #888888; 
+    --theme-accent: #ffffff;
+    --theme-text: #eaeaea; 
+  }
+
+  body {
+    background-color: var(--theme-bg);
+    color: var(--theme-text);
+    overflow-x: hidden;
+    -webkit-tap-highlight-color: transparent;
+    transition: background-color 0.5s ease, color 0.5s ease;
+  }
+
+  .display-font {
+    font-family: var(--font-fraunces), serif;
+  }
 }
