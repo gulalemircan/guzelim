@@ -34,6 +34,15 @@ export default function FloatingChat() {
     if (savedName) setCurrentUser(savedName);
   }, [isOpen]);
 
+  // YENİ EKLENEN KISIM: Chat'in açılıp kapandığını sisteme (Müzik Çalara) duyurur
+  useEffect(() => {
+    if (isOpen) {
+      window.dispatchEvent(new CustomEvent("chat-opened"));
+    } else {
+      window.dispatchEvent(new CustomEvent("chat-closed"));
+    }
+  }, [isOpen]);
+
   useEffect(() => {
     if (isOpen) {
       messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
