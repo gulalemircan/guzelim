@@ -8,11 +8,11 @@ import PwaInit from "@/components/PwaInit";
 export const metadata = {
   title: "Efsun'un Dünyası",
   description: "Sonsuza dek...",
-  manifest: "/manifest.webmanifest", // Next.js'in manifest.ts'yi derlediği gerçek yol
+  manifest: "/manifest.webmanifest",
   icons: {
-    icon: "/icon.png",
-    shortcut: "/icon.png",
-    apple: "/icon.png",
+    icon: "/logo-efsun.png",
+    shortcut: "/logo-efsun.png",
+    apple: "/logo-efsun.png",
   },
 };
 
@@ -32,9 +32,8 @@ export default function RootLayout({
   return (
     <html lang="tr">
       <head>
-        {/* Tarayıcıların inatla görmezden gelmesini engellemek için ikonları HTML'e zorla gömüyoruz */}
-        <link rel="icon" href="/icon.png" sizes="any" />
-        <link rel="apple-touch-icon" href="/icon.png" />
+        <link rel="icon" href="/logo-efsun.png" sizes="any" />
+        <link rel="apple-touch-icon" href="/logo-efsun.png" />
       </head>
       <body className="bg-background text-text pt-16 min-h-[100dvh] relative">
         

@@ -2,22 +2,17 @@ import { MetadataRoute } from 'next'
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'Bizim Dünyamız',
+    name: "Efsun'un Dünyası",
     short_name: 'E & E',
-    description: 'Efsun ve Emircan',
+    description: 'Sonsuza dek...',
     start_url: '/',
-    display: 'standalone', // Safari ve Chrome'da adres çubuğunu gizler, tam ekran yapar
-    background_color: '#000000',
-    theme_color: '#000000',
+    display: 'standalone',
+    background_color: '#0f172a',
+    theme_color: '#0f172a',
     icons: [
       {
-        src: '/icon.png',
-        sizes: '192x192',
-        type: 'image/png',
-      },
-      {
-        src: '/icon.png',
-        sizes: '512x512',
+        src: '/logo-efsun.png',
+        sizes: 'any', // Tarayıcı boyut bahanesiyle resmi reddedemesin diye "any" yaptık
         type: 'image/png',
       }
     ],
