@@ -1,91 +1,119 @@
 "use client";
-
-import { useState, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
+import { supabase } from "@/lib/supabaseClient";
 
 export default function GlobalMusicPlayer() {
+  const [songs, setSongs] = useState<any[]>([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [isExpanded, setIsExpanded] = useState(false); // Varsayılan olarak bar kapalı (chat'i engellemesin diye)
+  const [volume, setVolume] = useState(0.5); // Varsayılan ses %50
+  const [isExpanded, setIsExpanded] = useState(false); // YENİ: Barın açılıp kapanma durumu
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  // Şarkı listesi (Kendi mp3 dosyalarının yollarını veya Supabase linklerini buraya ekleyebilirsin)
-  const songs = [
-    "/music/jazz1.mp3", 
-    "/music/jazz2.mp3"
-  ];
-  const [currentSongIndex, setCurrentSongIndex] = useState(0);
+  useEffect(() => {
+    const fetchSongs = async () => {
+      const { data } = await supabase.from('jukebox_songs').select('*').order('id', { ascending: true });
+      if (data && data.length > 0) {
+        setSongs(data);
+      } else {
+        setSongs([{ url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" }]);
+      }
+    };
+    fetchSongs();
+  }, []);
 
-  const togglePlay = () => {
+  // Oynatma ve Durdurma Kontrolü
+  useEffect(() => {
     if (audioRef.current) {
       if (isPlaying) {
-        audioRef.current.pause();
+        audioRef.current.play().catch(err => console.log("Otomatik çalma engellendi:", err));
       } else {
-        audioRef.current.play();
+        audioRef.current.pause();
       }
-      setIsPlaying(!isPlaying);
     }
+  }, [currentIndex, isPlaying]);
+
+  // Ses Seviyesi Kontrolü
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.volume = volume;
+    }
+  }, [volume]);
+
+  const togglePlay = () => setIsPlaying(!isPlaying);
+  
+  const nextSong = () => {
+    if (songs.length === 0) return;
+    setCurrentIndex((prev) => (prev + 1) % songs.length);
+    setIsPlaying(true);
   };
 
-  const nextSong = () => {
-    const nextIndex = (currentSongIndex + 1) % songs.length;
-    setCurrentSongIndex(nextIndex);
-    if (isPlaying && audioRef.current) {
-      setTimeout(() => {
-        audioRef.current?.play().catch(e => console.log("Otomatik oynatma hatası:", e));
-      }, 100);
-    }
-  };
+  if (songs.length === 0) return null;
 
   return (
-    <div className="fixed bottom-4 left-4 z-[60] flex items-center">
+    <div className="fixed bottom-6 left-6 z-[100] flex items-center animate-in slide-in-from-bottom-10">
       
-      {/* ŞARKICI/ŞARKI ADI EKRANI YOK (Sadece arkaplanda çalışan ses) */}
-      <audio
-        ref={audioRef}
-        src={songs[currentSongIndex]}
-        onEnded={nextSong}
+      <audio 
+        ref={audioRef} 
+        src={songs[currentIndex]?.url} 
+        onEnded={nextSong} 
       />
-
-      {/* PLAK KISMI (Ana Buton) */}
+      
+      {/* MİNİ DÖNEN PLAK (Tıklayınca artık menüyü açıp kapatıyor) */}
       <div 
         onClick={() => setIsExpanded(!isExpanded)}
-        className={`relative w-12 h-12 rounded-full bg-[#111] border-[3px] border-[#333] flex items-center justify-center cursor-pointer shadow-2xl z-20 transition-transform hover:scale-105 ${
-          isPlaying ? 'animate-[spin_4s_linear_infinite]' : ''
-        }`}
-        title="Müzik Çalar"
+        className="relative z-20 w-12 h-12 rounded-full bg-black flex items-center justify-center cursor-pointer shadow-[0_2px_10px_rgba(0,0,0,0.5)] border-2 border-[#1a1a1a] hover:scale-105 transition-transform"
+        style={{ animation: isPlaying ? 'spin 4s linear infinite' : 'none' }}
       >
-        {/* Plak iç çizgileri (Detay) */}
-        <div className="absolute inset-[2px] rounded-full border border-white/10"></div>
-        <div className="absolute inset-[6px] rounded-full border border-white/5"></div>
-        {/* Plak göbeği (Oyun temanıza uygun renk alır) */}
-        <div className="w-3 h-3 rounded-full bg-primary/90 border border-black shadow-inner"></div>
+        <div className="absolute w-[80%] h-[80%] rounded-full border border-white/10"></div>
+        <div className="absolute w-[60%] h-[60%] rounded-full border border-white/10"></div>
+        <div className="w-4 h-4 bg-primary rounded-full flex items-center justify-center">
+          <div className="w-1 h-1 bg-background rounded-full"></div>
+        </div>
       </div>
 
-      {/* KONTROL BARI (Tıklayınca plağın arkasından açılır/kapanır) */}
+      {/* GİZLENİP AÇILAN KONTROL BARI */}
       <div 
-        className={`flex items-center bg-black/70 backdrop-blur-md rounded-r-full h-10 transition-all duration-300 ease-out overflow-hidden border-y border-r border-white/10 relative z-10 ${
-          isExpanded ? 'w-[72px] opacity-100 translate-x-0' : 'w-0 opacity-0 -translate-x-5 border-none'
+        className={`flex items-center bg-card/80 backdrop-blur-md border-y border-r border-primary/30 rounded-r-full shadow-2xl transition-all duration-500 ease-in-out overflow-hidden relative z-10 ${
+          isExpanded ? 'max-w-[250px] opacity-100 pl-6 pr-4 py-2 translate-x-0' : 'max-w-0 opacity-0 pl-0 pr-0 py-2 -translate-x-5 border-none'
         }`}
-        style={{ marginLeft: '-15px', paddingLeft: isExpanded ? '20px' : '0px' }}
+        style={{ marginLeft: '-16px' }} // Barın plağın tam arkasından çıkmasını sağlar
       >
-        <button 
-          onClick={(e) => { e.stopPropagation(); togglePlay(); }}
-          className="text-white/70 hover:text-white p-1 transition-colors outline-none"
-        >
-          {isPlaying ? (
-            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
-          ) : (
-            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
-          )}
-        </button>
+        {/* KONTROLLER */}
+        <div className="flex items-center gap-1 text-primary min-w-[70px]">
+          <button 
+            onClick={(e) => { e.stopPropagation(); togglePlay(); }} 
+            className="w-8 h-8 flex items-center justify-center hover:bg-primary/20 rounded-full transition-colors font-black shrink-0"
+          >
+            {isPlaying ? '⏸' : '▶'}
+          </button>
+          <button 
+            onClick={(e) => { e.stopPropagation(); nextSong(); }} 
+            className="w-8 h-8 flex items-center justify-center hover:bg-primary/20 rounded-full transition-colors font-black shrink-0"
+          >
+            {'⏭'}
+          </button>
+        </div>
 
-        <button 
-          onClick={(e) => { e.stopPropagation(); nextSong(); }}
-          className="text-white/70 hover:text-white p-1 transition-colors outline-none ml-1"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
-        </button>
+        {/* SES AYAR BARI */}
+        <div className="flex items-center gap-1.5 ml-2 border-l border-primary/20 pl-3 min-w-[100px]">
+          <span className="text-[12px] opacity-70 shrink-0">🔉</span>
+          <input 
+            type="range" 
+            min="0" max="1" step="0.01" 
+            value={volume}
+            onChange={(e) => setVolume(parseFloat(e.target.value))}
+            className="w-16 h-1.5 bg-primary/20 rounded-full appearance-none cursor-pointer outline-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-primary [&::-webkit-slider-thumb]:rounded-full hover:[&::-webkit-slider-thumb]:scale-125 transition-all shrink-0"
+          />
+        </div>
       </div>
 
+      <style dangerouslySetInnerHTML={{__html: `
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+      `}} />
     </div>
   );
 }
