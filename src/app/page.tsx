@@ -9,15 +9,16 @@ export default function Home() {
   const [step, setStep] = useState<"password" | "identity">("password");
   const router = useRouter();
 
-  // --- SUPABASE TEST FONKSİYONU ---
+  // --- GÜÇLENDİRİLMİŞ SUPABASE TEST FONKSİYONU ---
   const testBaglanti = async () => {
-    const { data, error } = await supabase.storage.listBuckets();
+    // Direkt olarak veritabanındaki tablodan veri çekmeyi dener
+    const { data, error } = await supabase.from('game_scores').select('*');
     
     if (error) {
-      alert("Hata kanka: Şifreleri veya dosyayı okuyamadı! ❌");
+      alert("Hata kanka! Veri çekilemedi. Sebebi: " + error.message + " ❌");
       console.error("Detaylı Hata:", error);
     } else {
-      alert("Bağlantı Kurşun Gibi! Supabase devrede! ✅");
+      alert("Bağlantı Kurşun Gibi! Supabase devrede ve tablodan " + (data?.length || 0) + " adet veri buldu! ✅");
       console.log("Gelen Veri:", data);
     }
   };
@@ -58,7 +59,6 @@ export default function Home() {
     router.push("/home"); 
   };
 
-  // YENİ EKLENDİ: fixed inset-0 yerine mobil uyumlu dinamik ekran yapısı kullanıldı
   return (
     <main className="min-h-[100dvh] w-full flex items-center justify-center bg-background p-5 relative overflow-hidden">
       {step === "password" ? (
@@ -68,7 +68,7 @@ export default function Home() {
           
           <input 
             type="password" 
-            inputMode="numeric" /* Mobilde direkt rakam klavyesini açar */
+            inputMode="numeric" 
             pattern="[0-9]*"
             value={password}
             onChange={handlePassword}
