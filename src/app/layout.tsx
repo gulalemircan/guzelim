@@ -8,6 +8,12 @@ import PwaInit from "@/components/PwaInit";
 export const metadata = {
   title: "Efsun'un Dünyası",
   description: "Sonsuza dek...",
+  manifest: "/manifest.webmanifest", // Next.js'in manifest.ts'yi derlediği gerçek yol
+  icons: {
+    icon: "/icon.png",
+    shortcut: "/icon.png",
+    apple: "/icon.png",
+  },
 };
 
 export const viewport: Viewport = {
@@ -25,6 +31,11 @@ export default function RootLayout({
 }) {
   return (
     <html lang="tr">
+      <head>
+        {/* Tarayıcıların inatla görmezden gelmesini engellemek için ikonları HTML'e zorla gömüyoruz */}
+        <link rel="icon" href="/icon.png" sizes="any" />
+        <link rel="apple-touch-icon" href="/icon.png" />
+      </head>
       <body className="bg-background text-text pt-16 min-h-[100dvh] relative">
         
         <Navbar />
