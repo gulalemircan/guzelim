@@ -42,6 +42,14 @@ export default function MemoryGamePage() {
   const [selectedPlayer, setSelectedPlayer] = useState<"Emircan" | "Efsun" | null>(null);
   const [isSaved, setIsSaved] = useState(false);
 
+  // --- EKLENEN KISIM BURASI (Ortalama Puan Hesaplama) ---
+  const getAverageScore = () => {
+    if (scores.length === 0) return "0";
+    const total = scores.reduce((sum, currentScore) => sum + currentScore, 0);
+    return (total / scores.length).toFixed(1);
+  };
+  // --------------------------------------------------------
+
   useEffect(() => {
     fetchLeaderboard();
   }, []);
