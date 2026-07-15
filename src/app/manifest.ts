@@ -12,7 +12,12 @@ export default function manifest(): MetadataRoute.Manifest {
     icons: [
       {
         src: '/logo-efsun.png',
-        sizes: 'any', // Tarayıcı boyut bahanesiyle resmi reddedemesin diye "any" yaptık
+        sizes: '192x192',
+        type: 'image/png',
+      },
+      {
+        src: '/logo-efsun.png',
+        sizes: '512x512',
         type: 'image/png',
       }
     ],
