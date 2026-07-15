@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+// Vercel ayarlarıyla uğraşmamak için linki ve şifreyi direkt buraya yazıyoruz
+const supabaseUrl = 'https://rhruclubaprrspwgbcms.supabase.co/rest/v1/';
+const supabaseAnonKey = 'sb_publishable_cqsPM1BzDex-SYjsxnbM4g_P5NjhXAf';
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
