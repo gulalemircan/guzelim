@@ -1,24 +1,46 @@
-import type { Metadata } from "next";
-import { Fraunces, Manrope } from "next/font/google";
+import type { Viewport } from "next";
 import "./globals.css";
+import Navbar from "@/components/Navbar";
+import GlobalMusicPlayer from "@/components/GlobalMusicPlayer"; 
+import FloatingChat from "@/components/FloatingChat";
+import PwaInit from "@/components/PwaInit"; // YENİ EKLENDİ: PWA motorunu başlatan bileşen
 
-const fraunces = Fraunces({ subsets: ["latin"], variable: "--font-fraunces" });
-const manrope = Manrope({ subsets: ["latin"], variable: "--font-manrope" });
+export const metadata = {
+  title: "Efsun'un Dünyası",
+  description: "Sonsuza dek...",
+  manifest: "/manifest.json", // Telefonun uygulamayı tanımasını sağlar
+};
 
-export const metadata: Metadata = {
-  title: "Emircan & Efsun",
-  description: "Küçük dünyamıza hoş geldin.",
+// Mobil yakınlaştırmayı ve klavye açıldığında ekran bozulmalarını engeller
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1, 
+  userScalable: false, 
+  themeColor: "#0f172a", 
 };
 
 export default function RootLayout({
   children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+}: {
+  children: React.ReactNode
+}) {
   return (
     <html lang="tr">
-      <body className={`${manrope.className} ${fraunces.variable} bg-background text-text antialiased transition-colors duration-500`}>
+      {/* min-h-screen yerine mobil uyumlu min-h-[100dvh] kullanıldı */}
+      <body className="bg-background text-text pt-16 min-h-[100dvh] relative">
+        
+        <Navbar />
+
         {children}
+
+        {/* EKLENEN KISIMLAR: Chat sağ altta, Müzik sol altta yüzecek */}
+        <FloatingChat /> 
+        <GlobalMusicPlayer />
+        
+        {/* YENİ EKLENDİ: Arka plan hizmetlerini (Çevrimdışı mod & Bildirimler) başlatır */}
+        <PwaInit /> 
+
       </body>
     </html>
   );

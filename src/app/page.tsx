@@ -1,12 +1,27 @@
 "use client";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { supabase } from "../lib/supabaseClient"; 
 
 export default function Home() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState(false);
   const [step, setStep] = useState<"password" | "identity">("password");
   const router = useRouter();
+
+  // --- SUPABASE TEST FONKSİYONU ---
+  const testBaglanti = async () => {
+    const { data, error } = await supabase.storage.listBuckets();
+    
+    if (error) {
+      alert("Hata kanka: Şifreleri veya dosyayı okuyamadı! ❌");
+      console.error("Detaylı Hata:", error);
+    } else {
+      alert("Bağlantı Kurşun Gibi! Supabase devrede! ✅");
+      console.log("Gelen Veri:", data);
+    }
+  };
+  // ---------------------------------
 
   // Kullanıcı daha önce giriş yaptıysa direkt ana sayfaya yönlendir
   useEffect(() => {
@@ -43,8 +58,9 @@ export default function Home() {
     router.push("/home"); 
   };
 
+  // YENİ EKLENDİ: fixed inset-0 yerine mobil uyumlu dinamik ekran yapısı kullanıldı
   return (
-    <main className="fixed inset-0 flex items-center justify-center bg-background">
+    <main className="min-h-[100dvh] w-full flex items-center justify-center bg-background p-5 relative overflow-hidden">
       {step === "password" ? (
         <div className="bg-card p-10 rounded-[30px] border border-white/10 w-[85%] max-w-[400px] text-center shadow-2xl transition-all duration-300">
           <h1 className="display-font text-5xl mb-2 text-text">E & E</h1>
@@ -52,6 +68,8 @@ export default function Home() {
           
           <input 
             type="password" 
+            inputMode="numeric" /* Mobilde direkt rakam klavyesini açar */
+            pattern="[0-9]*"
             value={password}
             onChange={handlePassword}
             placeholder="Sana özel şifre..." 
@@ -84,6 +102,15 @@ export default function Home() {
           </button>
         </div>
       )}
+
+      {/* GİZLİ TEST BUTONU */}
+      <button 
+        onClick={testBaglanti}
+        className="absolute bottom-6 right-6 bg-primary/20 hover:bg-primary/80 text-white/50 hover:text-white p-3 rounded-full text-sm backdrop-blur-sm transition-all duration-300 z-50 cursor-pointer"
+        title="Supabase Bağlantısını Test Et"
+      >
+        🔌
+      </button>
     </main>
   );
 }

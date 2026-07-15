@@ -1,44 +1,31 @@
 @import "tailwindcss";
 
+/* Yeni Tailwind motoruna kendi renklerimizi tanıtıyoruz */
 @theme {
-  --color-background: var(--theme-bg);
-  --color-card: var(--theme-card);
-  --color-primary: var(--theme-primary);
-  --color-secondary: var(--theme-secondary);
-  --color-accent: var(--theme-accent);
-  --color-text: var(--theme-text);
+  --color-background: var(--background);
+  --color-text: var(--text);
+  --color-primary: var(--primary);
+  --color-card: var(--card);
 }
 
-@layer base {
-  /* 1. BORDO & ALTIN */
-  :root {
-    --theme-bg: #3b171f; 
-    --theme-card: #4a1f28; 
-    --theme-primary: #c5a059; 
-    --theme-secondary: #a88544; 
-    --theme-accent: #c5a059;
-    --theme-text: #fdfbf7; 
-  }
+/* TEMA 1: Varsayılan (Bordo & Mat Altın) */
+:root {
+  --background: #3d0c17;
+  --text: #fdf8f5;
+  --primary: #d4af37;
+  --card: #2b0710;
+}
 
-  /* 2. KOYU SİYAH & BEYAZ */
-  :root[data-theme="koyu-siyah"] {
-    --theme-bg: #0a0a0a; 
-    --theme-card: #171717; 
-    --theme-primary: #ffffff; 
-    --theme-secondary: #888888; 
-    --theme-accent: #ffffff;
-    --theme-text: #eaeaea; 
-  }
+/* TEMA 2: Gece Modu (Siyah & Pudra Pembesi) */
+[data-theme='dark'] {
+  --background: #0a0a0a;
+  --text: #ffffff;
+  --primary: #ffb6c1;
+  --card: #141414;
+}
 
-  body {
-    background-color: var(--theme-bg);
-    color: var(--theme-text);
-    overflow-x: hidden;
-    -webkit-tap-highlight-color: transparent;
-    transition: background-color 0.5s ease, color 0.5s ease;
-  }
-
-  .display-font {
-    font-family: var(--font-fraunces), serif;
-  }
+body {
+  background-color: var(--background);
+  color: var(--text);
+  transition: background-color 0.5s ease, color 0.5s ease;
 }
