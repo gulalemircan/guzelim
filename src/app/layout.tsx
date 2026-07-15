@@ -8,7 +8,7 @@ import PwaInit from "@/components/PwaInit";
 export const metadata = {
   title: "Efsun'un Dünyası",
   description: "Sonsuza dek...",
-  manifest: "/manifest.webmanifest",
+  // DİKKAT: manifest yönlendirmesini buradan kaldırdık, aşağıda zorla gömeceğiz
   icons: {
     icon: "/logo-efsun.png",
     shortcut: "/logo-efsun.png",
@@ -32,6 +32,8 @@ export default function RootLayout({
   return (
     <html lang="tr">
       <head>
+        {/* İŞTE VERCEL'İ HACKLEDİĞİMİZ SATIR: use-credentials ile engeli aşıyoruz */}
+        <link rel="manifest" href="/manifest.webmanifest" crossOrigin="use-credentials" />
         <link rel="icon" href="/logo-efsun.png" sizes="any" />
         <link rel="apple-touch-icon" href="/logo-efsun.png" />
       </head>
