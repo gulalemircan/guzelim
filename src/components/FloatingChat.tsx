@@ -24,7 +24,6 @@ export default function FloatingChat() {
   const [errorAnim, setErrorAnim] = useState(false);
   const [showMemeMenu, setShowMemeMenu] = useState(false);
   
-  // YENİ: Ekrana hata durumlarını basmak için sistem mesajı
   const [debugMsg, setDebugMsg] = useState<string>(""); 
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -87,7 +86,6 @@ export default function FloatingChat() {
     return () => { supabase.removeChannel(channel); };
   }, []);
 
-  // YENİ: AŞAMALI VE EKRAN ÇIKTILARIYLA BİLDİRİM KAYDETME
   const handleEnableNotifications = async () => {
     try {
       setDebugMsg("Sistem kontrol ediliyor...");
@@ -98,18 +96,21 @@ export default function FloatingChat() {
       }
       
       if (!('PushManager' in window)) {
-        setDebugMsg("HATA: PushManager Yok! (iPhone kullanıyorsan uygulamayı Safari'den değil, Ana Ekrana Ekleyerek açman ŞART!)");
+        setDebugMsg("HATA: PushManager Yok! (Ana Ekrana Eklemedin veya iPhone engelliyor)");
         return;
       }
 
-      setDebugMsg("Telefon İzin Penceresi Bekleniyor (İzin Ver'e Bas)...");
+      setDebugMsg("Telefon İzin Penceresi Bekleniyor...");
       const permission = await Notification.requestPermission();
       
       setDebugMsg(`İzin durumu: ${permission}`);
       
       if (permission === 'granted') {
-        setDebugMsg("Arka plan motoruna (SW) bağlanılıyor...");
-        const registration = await navigator.serviceWorker.ready;
+        
+        // YENİ: Beklemek yerine motoru zorla kurup çalıştırıyoruz!
+        setDebugMsg("Arka plan motoru (SW) zorla başlatılıyor...");
+        const registration = await navigator.serviceWorker.register('/sw.js');
+        
         const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
         
         if (!vapidPublicKey) {
@@ -117,39 +118,45 @@ export default function FloatingChat() {
           return;
         }
 
-        setDebugMsg("Telefon için cihaz şifresi üretiliyor...");
+        setDebugMsg("Cihaz şifresi üretiliyor...");
         const convertedVapidKey = urlBase64ToUint8Array(vapidPublicKey);
-        let subscription = await registration.pushManager.getSubscription();
         
-        if (!subscription) {
-          subscription = await registration.pushManager.subscribe({
-            userVisibleOnly: true,
-            applicationServerKey: convertedVapidKey
-          });
-        }
+        try {
+          let subscription = await registration.pushManager.getSubscription();
+          
+          if (!subscription) {
+            setDebugMsg("Yeni abonelik oluşturuluyor (Biraz sürebilir)...");
+            subscription = await registration.pushManager.subscribe({
+              userVisibleOnly: true,
+              applicationServerKey: convertedVapidKey
+            });
+          }
 
-        const savedName = localStorage.getItem("myName");
-        if (!savedName) {
-          setDebugMsg("HATA: İsim bulunamadı."); 
-          return;
-        }
+          const savedName = localStorage.getItem("myName");
+          if (!savedName) {
+            setDebugMsg("HATA: İsim bulunamadı."); 
+            return;
+          }
 
-        setDebugMsg("Veritabanına (Supabase) gönderiliyor...");
-        const subString = JSON.stringify(subscription);
-        
-        const { error } = await supabase.from('push_subscriptions').insert([{ 
-           user_name: savedName, 
-           subscription: JSON.parse(subString) 
-        }]);
+          setDebugMsg("Veritabanına (Supabase) kaydediliyor...");
+          const subString = JSON.stringify(subscription);
+          
+          const { error } = await supabase.from('push_subscriptions').insert([{ 
+             user_name: savedName, 
+             subscription: JSON.parse(subString) 
+          }]);
 
-        if (error) {
-          setDebugMsg("Veritabanı Hatası: " + error.message);
-        } else {
-          setDebugMsg("✅ BAŞARILI! Cihaz Efsun olarak kaydedildi. Artık test edebilirsin!");
+          if (error) {
+            setDebugMsg("Veritabanı Hatası: " + error.message);
+          } else {
+            setDebugMsg("✅ BAŞARILI! Cihaz Efsun olarak kaydedildi.");
+          }
+        } catch (subError: any) {
+          setDebugMsg("Abonelik Hatası: " + subError.message);
         }
         
       } else {
-        setDebugMsg("HATA: İzin verilmedi veya telefon engelledi.");
+        setDebugMsg("HATA: İzin verilmedi.");
       }
     } catch (err: any) {
       setDebugMsg("Kritik Hata: " + err.message);
@@ -238,7 +245,6 @@ export default function FloatingChat() {
               </div>
             </div>
 
-            {/* YENİ: SİSTEM MONİTÖRÜ (Hata ve Onay mesajları burada çıkacak) */}
             {debugMsg && (
               <div className="bg-black/80 text-green-400 p-2 rounded-lg text-xs font-mono break-words shadow-inner border border-green-500/30">
                 &gt; {debugMsg}
@@ -294,7 +300,6 @@ export default function FloatingChat() {
   );
 }
 
-// Şifreyi telefonun anlayacağı formata çeviren yardımcı fonksiyon
 function urlBase64ToUint8Array(base64String: string) {
   const padding = '='.repeat((4 - base64String.length % 4) % 4);
   const base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
