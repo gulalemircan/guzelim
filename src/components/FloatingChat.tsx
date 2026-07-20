@@ -34,7 +34,7 @@ export default function FloatingChat() {
     if (savedName) setCurrentUser(savedName);
   }, [isOpen]);
 
-  // Chat'in açılıp kapandığını sisteme (Müzik Çalara) duyurur[cite: 8]
+  // Chat'in açılıp kapandığını sisteme (Müzik Çalara) duyurur
   useEffect(() => {
     if (isOpen) {
       window.dispatchEvent(new CustomEvent("chat-opened"));
@@ -102,7 +102,7 @@ export default function FloatingChat() {
 
     const textLower = textToSend.toLowerCase();
     
-    // Yasaklı kelime animasyonu[cite: 8]
+    // Yasaklı kelime animasyonu
     if (textLower.includes("peki") || textLower.includes("sen bilirsin")) {
       setErrorAnim(true);
       if (typeof window !== "undefined" && window.navigator.vibrate) window.navigator.vibrate([50, 50, 50]);
@@ -122,8 +122,8 @@ export default function FloatingChat() {
     const { error } = await supabase.from('messages').insert([newMessage]);
 
     if (!error) {
-      if (!customText) setInputText("");  //[cite: 8]
-      setShowMemeMenu(false);  //[cite: 8]
+      if (!customText) setInputText("");
+      setShowMemeMenu(false);
 
       // YENİ: API ÜZERİNDEN BİLDİRİMİ ATEŞLE
       const targetName = currentUser === "Emircan" ? "Efsun" : "Emircan";
@@ -144,7 +144,7 @@ export default function FloatingChat() {
       }).catch(console.error);
 
     } else {
-      console.error("Mesaj gitmedi:", error); //[cite: 8]
+      console.error("Mesaj gitmedi:", error);
     }
   };
 
@@ -167,12 +167,23 @@ export default function FloatingChat() {
               <h3 className="display-font text-lg text-primary">Özel Sohbet 💬</h3>
               <p className="text-[9px] uppercase tracking-widest text-primary/60 font-bold">Uçtan Uca Aşk Korumalı</p>
             </div>
-            <button 
-              onClick={() => setIsOpen(false)} 
-              className="w-8 h-8 flex items-center justify-center bg-card rounded-full text-primary hover:bg-primary hover:text-background transition-colors font-bold shadow-sm"
-            >
-              ✕
-            </button>
+            
+            {/* GİZLİ ÇIKIŞ YAP BUTONU */}
+            <div className="flex items-center gap-2">
+              <button 
+                onClick={() => { localStorage.removeItem("myName"); window.location.reload(); }}
+                className="text-[10px] bg-red-500/20 text-red-500 px-2 py-1 rounded-lg font-bold hover:bg-red-500 hover:text-white transition-colors"
+              >
+                Çıkış
+              </button>
+              <button 
+                onClick={() => setIsOpen(false)} 
+                className="w-8 h-8 flex items-center justify-center bg-card rounded-full text-primary hover:bg-primary hover:text-background transition-colors font-bold shadow-sm"
+              >
+                ✕
+              </button>
+            </div>
+
           </div>
 
           <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4 relative">
