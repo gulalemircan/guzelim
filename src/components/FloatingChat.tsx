@@ -107,9 +107,12 @@ export default function FloatingChat() {
       
       if (permission === 'granted') {
         
-        // YENİ: Beklemek yerine motoru zorla kurup çalıştırıyoruz!
-        setDebugMsg("Arka plan motoru (SW) zorla başlatılıyor...");
-        const registration = await navigator.serviceWorker.register('/sw.js');
+        setDebugMsg("Motor kuruluyor...");
+        await navigator.serviceWorker.register('/sw.js');
+        
+        // YENİ: Kodun hızını kesip motorun TAM OLARAK aktif olmasını bekliyoruz!
+        setDebugMsg("Motorun tam aktif olması bekleniyor...");
+        const registration = await navigator.serviceWorker.ready; 
         
         const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
         
@@ -125,7 +128,7 @@ export default function FloatingChat() {
           let subscription = await registration.pushManager.getSubscription();
           
           if (!subscription) {
-            setDebugMsg("Yeni abonelik oluşturuluyor (Biraz sürebilir)...");
+            setDebugMsg("Yeni abonelik oluşturuluyor...");
             subscription = await registration.pushManager.subscribe({
               userVisibleOnly: true,
               applicationServerKey: convertedVapidKey
@@ -138,7 +141,7 @@ export default function FloatingChat() {
             return;
           }
 
-          setDebugMsg("Veritabanına (Supabase) kaydediliyor...");
+          setDebugMsg("Veritabanına kaydediliyor...");
           const subString = JSON.stringify(subscription);
           
           const { error } = await supabase.from('push_subscriptions').insert([{ 
