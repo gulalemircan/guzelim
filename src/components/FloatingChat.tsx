@@ -34,7 +34,7 @@ export default function FloatingChat() {
     if (savedName) setCurrentUser(savedName);
   }, [isOpen]);
 
-  // YENİ EKLENEN KISIM: Chat'in açılıp kapandığını sisteme (Müzik Çalara) duyurur
+  // Chat'in açılıp kapandığını sisteme (Müzik Çalara) duyurur[cite: 8]
   useEffect(() => {
     if (isOpen) {
       window.dispatchEvent(new CustomEvent("chat-opened"));
@@ -102,6 +102,7 @@ export default function FloatingChat() {
 
     const textLower = textToSend.toLowerCase();
     
+    // Yasaklı kelime animasyonu[cite: 8]
     if (textLower.includes("peki") || textLower.includes("sen bilirsin")) {
       setErrorAnim(true);
       if (typeof window !== "undefined" && window.navigator.vibrate) window.navigator.vibrate([50, 50, 50]);
@@ -121,10 +122,29 @@ export default function FloatingChat() {
     const { error } = await supabase.from('messages').insert([newMessage]);
 
     if (!error) {
-      if (!customText) setInputText(""); 
-      setShowMemeMenu(false); 
+      if (!customText) setInputText("");  //[cite: 8]
+      setShowMemeMenu(false);  //[cite: 8]
+
+      // YENİ: API ÜZERİNDEN BİLDİRİMİ ATEŞLE
+      const targetName = currentUser === "Emircan" ? "Efsun" : "Emircan";
+      let notificationText = textToSend;
+      
+      if (textToSend.startsWith("🔊 Sesli Mesaj: ")) {
+        notificationText = "Sana bir sesli mesaj gönderdi 🎵";
+      }
+      
+      fetch('/api/push', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          senderName: currentUser,
+          text: notificationText,
+          targetName: targetName
+        })
+      }).catch(console.error);
+
     } else {
-      console.error("Mesaj gitmedi:", error);
+      console.error("Mesaj gitmedi:", error); //[cite: 8]
     }
   };
 
