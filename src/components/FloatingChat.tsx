@@ -24,7 +24,8 @@ export default function FloatingChat() {
   const [errorAnim, setErrorAnim] = useState(false);
   const [showMemeMenu, setShowMemeMenu] = useState(false);
   
-  const [debugMsg, setDebugMsg] = useState<string>(""); 
+  const [debugMsg, setDebugMsg] = useState<string>("Motor hazırlanıyor..."); 
+  const [swReg, setSwReg] = useState<ServiceWorkerRegistration | null>(null);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -36,6 +37,25 @@ export default function FloatingChat() {
     const savedName = localStorage.getItem("myName");
     if (savedName) setCurrentUser(savedName);
   }, [isOpen]);
+
+  // UYGULAMA AÇILIR AÇILMAZ MOTORU ÖNDEN KURUP HAZIR HALE GETİRİYORuz (Mobil çakışmasını önler)
+  useEffect(() => {
+    const initServiceWorker = async () => {
+      if ('serviceWorker' in navigator) {
+        try {
+          const reg = await navigator.serviceWorker.register('/sw.js');
+          await navigator.serviceWorker.ready;
+          setSwReg(reg);
+          setDebugMsg("✅ Motor hazır! Zile basabilirsin.");
+        } catch (err: any) {
+          setDebugMsg("❌ Motor Hatası: " + err.message);
+        }
+      } else {
+        setDebugMsg("HATA: Service Worker desteklenmiyor.");
+      }
+    };
+    initServiceWorker();
+  }, []);
 
   useEffect(() => {
     if (isOpen) {
@@ -88,10 +108,8 @@ export default function FloatingChat() {
 
   const handleEnableNotifications = async () => {
     try {
-      setDebugMsg("Sistem kontrol ediliyor...");
-      
-      if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-        setDebugMsg("HATA: Push API Yok! (Ana Ekrana Eklemedin veya telefon engelliyor)");
+      if (!('PushManager' in window)) {
+        setDebugMsg("HATA: PushManager Yok! (Ana Ekrana Eklemedin)");
         return;
       }
 
@@ -100,26 +118,13 @@ export default function FloatingChat() {
       setDebugMsg(`İzin durumu: ${permission}`);
       
       if (permission === 'granted') {
+        let registration = swReg;
         
-        setDebugMsg("Motor kuruluyor...");
-        const registration = await navigator.serviceWorker.register('/sw.js');
-        
-        setDebugMsg("Motorun uyanması bekleniyor...");
-        await navigator.serviceWorker.ready; 
-        
-        // YENİ: MOBİL İÇİN KRİTİK ZAMANLAMA KONTROLÜ
-        // Telefon motoru uykuda bırakmışsa onu zorla 2 saniye bekletiyoruz.
-        if (!registration.active) {
-          setDebugMsg("Motor yavaş uyandı, ısınması için zorla bekletiliyor...");
-          await new Promise(resolve => setTimeout(resolve, 2000));
+        if (!registration) {
+          setDebugMsg("Motor bekleniyor...");
+          registration = await navigator.serviceWorker.ready;
         }
 
-        // 2 saniye sonra hala aktif değilse sistemi uyar
-        if (!registration.active) {
-          setDebugMsg("HATA: Telefon arka plan motorunu aktif edemedi. Uygulamayı silip baştan Ana Ekrana ekle.");
-          return;
-        }
-        
         const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
         
         if (!vapidPublicKey) {
@@ -130,38 +135,34 @@ export default function FloatingChat() {
         setDebugMsg("Cihaz şifresi üretiliyor...");
         const convertedVapidKey = urlBase64ToUint8Array(vapidPublicKey);
         
-        try {
-          let subscription = await registration.pushManager.getSubscription();
-          
-          if (!subscription) {
-            setDebugMsg("Yeni abonelik oluşturuluyor...");
-            subscription = await registration.pushManager.subscribe({
-              userVisibleOnly: true,
-              applicationServerKey: convertedVapidKey
-            });
-          }
+        let subscription = await registration.pushManager.getSubscription();
+        
+        if (!subscription) {
+          setDebugMsg("Yeni abonelik oluşturuluyor...");
+          subscription = await registration.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: convertedVapidKey
+          });
+        }
 
-          const savedName = localStorage.getItem("myName");
-          if (!savedName) {
-            setDebugMsg("HATA: İsim bulunamadı."); 
-            return;
-          }
+        const savedName = localStorage.getItem("myName");
+        if (!savedName) {
+          setDebugMsg("HATA: İsim bulunamadı."); 
+          return;
+        }
 
-          setDebugMsg("Veritabanına kaydediliyor...");
-          const subString = JSON.stringify(subscription);
-          
-          const { error } = await supabase.from('push_subscriptions').insert([{ 
-             user_name: savedName, 
-             subscription: JSON.parse(subString) 
-          }]);
+        setDebugMsg("Veritabanına kaydediliyor...");
+        const subString = JSON.stringify(subscription);
+        
+        const { error } = await supabase.from('push_subscriptions').insert([{ 
+           user_name: savedName, 
+           subscription: JSON.parse(subString) 
+        }]);
 
-          if (error) {
-            setDebugMsg("Veritabanı Hatası: " + error.message);
-          } else {
-            setDebugMsg("✅ BAŞARILI! Cihaz kaydedildi.");
-          }
-        } catch (subError: any) {
-          setDebugMsg("Abonelik Hatası: " + subError.message);
+        if (error) {
+          setDebugMsg("Veritabanı Hatası: " + error.message);
+        } else {
+          setDebugMsg("✅ BAŞARILI! Cihaz kaydedildi.");
         }
         
       } else {
