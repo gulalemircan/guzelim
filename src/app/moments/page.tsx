@@ -35,17 +35,29 @@ export default function MomentsPage() {
     if (pics.data) setPhotos(pics.data);
   };
 
-  // ÇÖZÜM: Veriyi eklerken sayfa yenilemeye gerek kalmadan anında ekrana basıyoruz (.select() ile)
+  // ÇÖZÜM: Optimistic UI ile "Bekleme Yok, Anında Ekrana Bas" Mantığı
   const handleAdd = async (type: 'watch' | 'todo') => {
     playSound("list_add"); 
+    
     if (type === 'watch' && newWatch.trim()) {
-      const { data } = await supabase.from('watch_list').insert([{ text: newWatch, completed: false }]).select();
-      if (data) setWatchList([...watchList, data[0]]);
-      setNewWatch("");
+      const text = newWatch;
+      setNewWatch(""); // 1. Input'u anında temizle
+      
+      // 2. Veritabanını beklemeden ekrana ANINDA (0 saniye) bas
+      setWatchList(prev => [...prev, { id: Date.now(), text, completed: false }]); 
+      
+      // 3. Arka planda hissettirmeden kaydet ve gerçek ID'yi almak için yenile
+      await supabase.from('watch_list').insert([{ text, completed: false }]);
+      fetchData();
+      
     } else if (type === 'todo' && newTodo.trim()) {
-      const { data } = await supabase.from('todo_list').insert([{ text: newTodo, completed: false }]).select();
-      if (data) setTodoList([...todoList, data[0]]);
-      setNewTodo("");
+      const text = newTodo;
+      setNewTodo(""); 
+      
+      setTodoList(prev => [...prev, { id: Date.now(), text, completed: false }]);
+      
+      await supabase.from('todo_list').insert([{ text, completed: false }]);
+      fetchData();
     }
   };
 
@@ -54,7 +66,7 @@ export default function MomentsPage() {
     const setList = type === 'watch' ? setWatchList : setTodoList;
     const table = type === 'watch' ? 'watch_list' : 'todo_list';
     
-    // Anında ekranda değiştir
+    // Anında ekranda değiştir (0 saniye)
     setList(prev => prev.map(item => item.id === id ? { ...item, completed: !item.completed } : item));
     
     // Arka planda veritabanına kaydet
@@ -99,10 +111,14 @@ export default function MomentsPage() {
       reader.onload = async (event) => {
         if (event.target?.result) {
           playSound("photo_add"); 
+          const tempPhotoUrl = event.target.result as string;
           
-          // ÇÖZÜM: Fotoğrafı veritabanına atıp dönen sonucu anında ekrana yansıtıyoruz
-          const { data } = await supabase.from('photos').insert([{ url: event.target.result as string, note: "" }]).select();
-          if (data) setPhotos([...photos, data[0]]);
+          // ÇÖZÜM: Fotoğrafı veritabanına atmadan önce ANINDA (0 saniye) ekrana basıyoruz
+          setPhotos(prev => [...prev, { id: Date.now(), url: tempPhotoUrl, note: "" }]);
+          
+          // Arka planda veritabanına at ve sonra sessizce yenile
+          await supabase.from('photos').insert([{ url: tempPhotoUrl, note: "" }]);
+          fetchData();
         }
       };
       reader.readAsDataURL(e.target.files[0]);
@@ -273,7 +289,6 @@ export default function MomentsPage() {
               {photos.map(photo => (
                 <div key={photo.id} className="bg-background border border-primary/20 rounded-2xl p-4 flex flex-col group relative shadow-md hover:shadow-xl transition-all">
                   
-                  {/* ÇÖZÜM: opacity-100 md:opacity-0 md:group-hover:opacity-100 ile mobilde hep görünür yapıldı */}
                   <button 
                     onClick={() => setConfirmModal({ isOpen: true, type: 'photo', id: photo.id })}
                     className="absolute top-6 right-6 w-8 h-8 bg-red-500/90 text-white rounded-full flex items-center justify-center opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity z-10 hover:bg-red-600 shadow-lg"
