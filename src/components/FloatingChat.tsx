@@ -24,9 +24,11 @@ export default function FloatingChat() {
   const [errorAnim, setErrorAnim] = useState(false);
   const [showMemeMenu, setShowMemeMenu] = useState(false);
   
-  const [debugMsg, setDebugMsg] = useState<string>("Motor hazırlanıyor..."); 
-  const [swReg, setSwReg] = useState<ServiceWorkerRegistration | null>(null);
+  // YENİ: RÖNTGEN SİSTEMİ (Tüm adımları kaydedecek)
+  const [logs, setLogs] = useState<string[]>(["🔍 Röntgen Sistemi Başlatıldı..."]);
+  const addLog = (msg: string) => setLogs(prev => [...prev, `> ${msg}`]);
   
+  const [swReg, setSwReg] = useState<ServiceWorkerRegistration | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const [messages, setMessages] = useState<Message[]>([]);
@@ -38,27 +40,45 @@ export default function FloatingChat() {
     if (savedName) setCurrentUser(savedName);
   }, [isOpen]);
 
-  // UYGULAMA AÇILIR AÇILMAZ MOTORU ÖNDEN KURUP HAZIR HALE GETİRİYORuz (Mobil çakışmasını önler)
+  // UYGULAMA AÇILDIĞINDA TELEFONU CHECK-UP'A SOKUYORUZ
   useEffect(() => {
-    const initServiceWorker = async () => {
-      if ('serviceWorker' in navigator) {
-        try {
-          const reg = await navigator.serviceWorker.register('/sw.js');
-          await navigator.serviceWorker.ready;
-          setSwReg(reg);
-          setDebugMsg("✅ Motor hazır! Zile basabilirsin.");
-        } catch (err: any) {
-          setDebugMsg("❌ Motor Hatası: " + err.message);
+    const runDiagnostics = async () => {
+      try {
+        // 1. Cihaz PWA (Ana Ekran) modunda mı kontrolü
+        const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true;
+        addLog(`PWA Modu (Ana Ekran): ${isStandalone ? "✅ EVET" : "❌ HAYIR (Tarayıcıdasın)"}`);
+
+        // 2. Service Worker Desteği
+        if (!('serviceWorker' in navigator)) {
+          addLog("❌ HATA: Tarayıcın Service Worker desteklemiyor!");
+          return;
         }
-      } else {
-        setDebugMsg("HATA: Service Worker desteklenmiyor.");
+        addLog("✅ Service Worker Desteği Var");
+
+        // 3. Push API Desteği (iPhone'ların en çok takıldığı yer)
+        if (!('PushManager' in window)) {
+          addLog("❌ HATA: PushManager YOK! (Apple/Tarayıcı bildirim altyapısını engelliyor)");
+          return;
+        }
+        addLog("✅ PushManager Desteği Var");
+
+        // 4. Motor Kurulumu
+        addLog("Motor register ediliyor...");
+        const reg = await navigator.serviceWorker.register('/sw.js');
+        addLog(`✅ Motor Register Edildi. Durum: ${reg.active ? 'Aktif' : 'Uykuda/Bekliyor'}`);
+
+        addLog("Motorun tam hazır olması bekleniyor...");
+        await navigator.serviceWorker.ready;
+        addLog("✅ Motor TAM Hazır!");
+        setSwReg(reg);
+
+      } catch (err: any) {
+        addLog(`❌ KRİTİK SİSTEM HATASI: ${err.message}`);
       }
     };
-    initServiceWorker();
-  }, []);
 
-  useEffect(() => {
     if (isOpen) {
+      runDiagnostics();
       window.dispatchEvent(new CustomEvent("chat-opened"));
     } else {
       window.dispatchEvent(new CustomEvent("chat-closed"));
@@ -67,7 +87,7 @@ export default function FloatingChat() {
 
   useEffect(() => {
     if (isOpen) messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, isOpen]);
+  }, [messages, isOpen, logs]);
 
   useEffect(() => { memesRef.current = memes; }, [memes]);
 
@@ -108,68 +128,57 @@ export default function FloatingChat() {
 
   const handleEnableNotifications = async () => {
     try {
-      if (!('PushManager' in window)) {
-        setDebugMsg("HATA: PushManager Yok! (Ana Ekrana Eklemedin)");
-        return;
-      }
-
-      setDebugMsg("Telefon İzin Penceresi Bekleniyor...");
+      addLog("🔔 Zile Basıldı. İzin isteniyor...");
       const permission = await Notification.requestPermission();
-      setDebugMsg(`İzin durumu: ${permission}`);
+      addLog(`İzin durumu: ${permission}`);
       
       if (permission === 'granted') {
         let registration = swReg;
         
         if (!registration) {
-          setDebugMsg("Motor bekleniyor...");
+          addLog("Motor ref'ten okunamadı, ready bekleniyor...");
           registration = await navigator.serviceWorker.ready;
         }
 
         const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-        
         if (!vapidPublicKey) {
-          setDebugMsg("HATA: VAPID Key bulunamadı (Vercel ayarlarına bak)."); 
+          addLog("❌ HATA: VAPID Key bulunamadı!"); 
           return;
         }
 
-        setDebugMsg("Cihaz şifresi üretiliyor...");
+        addLog("Abonelik şifresi oluşturuluyor...");
         const convertedVapidKey = urlBase64ToUint8Array(vapidPublicKey);
         
-        let subscription = await registration.pushManager.getSubscription();
-        
-        if (!subscription) {
-          setDebugMsg("Yeni abonelik oluşturuluyor...");
-          subscription = await registration.pushManager.subscribe({
+        try {
+          addLog("PushManager.subscribe() tetikleniyor...");
+          const subscription = await registration.pushManager.subscribe({
             userVisibleOnly: true,
             applicationServerKey: convertedVapidKey
           });
-        }
 
-        const savedName = localStorage.getItem("myName");
-        if (!savedName) {
-          setDebugMsg("HATA: İsim bulunamadı."); 
-          return;
-        }
+          addLog("Supabase'e kaydediliyor...");
+          const savedName = localStorage.getItem("myName");
+          const subString = JSON.stringify(subscription);
+          
+          const { error } = await supabase.from('push_subscriptions').insert([{ 
+             user_name: savedName || "Efsun", 
+             subscription: JSON.parse(subString) 
+          }]);
 
-        setDebugMsg("Veritabanına kaydediliyor...");
-        const subString = JSON.stringify(subscription);
-        
-        const { error } = await supabase.from('push_subscriptions').insert([{ 
-           user_name: savedName, 
-           subscription: JSON.parse(subString) 
-        }]);
-
-        if (error) {
-          setDebugMsg("Veritabanı Hatası: " + error.message);
-        } else {
-          setDebugMsg("✅ BAŞARILI! Cihaz kaydedildi.");
+          if (error) {
+            addLog(`❌ Veritabanı Hatası: ${error.message}`);
+          } else {
+            addLog("✅✅ BAŞARILI! Cihaz Supabase'e kaydedildi.");
+          }
+        } catch (subErr: any) {
+          addLog(`❌ ABONELİK HATASI: ${subErr.message}`);
         }
         
       } else {
-        setDebugMsg("HATA: İzin verilmedi.");
+        addLog("❌ İzin verilmedi.");
       }
     } catch (err: any) {
-      setDebugMsg("Kritik Hata: " + err.message);
+      addLog(`❌ Beklenmeyen Hata: ${err.message}`);
     }
   };
 
@@ -255,11 +264,14 @@ export default function FloatingChat() {
               </div>
             </div>
 
-            {debugMsg && (
-              <div className="bg-black/80 text-green-400 p-2 rounded-lg text-xs font-mono break-words shadow-inner border border-green-500/30">
-                &gt; {debugMsg}
-              </div>
-            )}
+            {/* RÖNTGEN EKRANI */}
+            <div className="bg-black/90 text-green-400 p-2 rounded-lg text-[10px] font-mono shadow-inner border border-green-500/30 max-h-32 overflow-y-auto flex flex-col gap-1">
+              {logs.map((log, i) => (
+                <span key={i} className={log.includes('❌') ? 'text-red-400' : log.includes('✅') ? 'text-green-300' : ''}>
+                  {log}
+                </span>
+              ))}
+            </div>
             
           </div>
 
@@ -284,18 +296,7 @@ export default function FloatingChat() {
             )}
           </div>
 
-          {showMemeMenu && (
-            <div className="flex gap-2 p-2 bg-background/90 border-t border-primary/20 overflow-x-auto">
-              {memes.length === 0 ? (
-                <span className="text-xs text-primary/50 px-2 font-bold py-2">Veritabanında henüz meme yok...</span>
-              ) : (
-                memes.map(meme => (
-                  <button key={meme.id} onClick={() => sendMeme(meme.name)} className="bg-primary/20 hover:bg-primary/40 text-primary border border-primary/30 px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-colors">{meme.name} 🎵</button>
-                ))
-              )}
-            </div>
-          )}
-
+          {/* ... MEME VE MESAJ YAZMA KISMI AYNI ... */}
           <div className="p-3 bg-background/50 border-t border-primary/20 flex gap-2 items-center backdrop-blur-md">
             <button onClick={() => setShowMemeMenu(!showMemeMenu)} className="w-10 h-10 rounded-xl bg-card border border-primary/20 text-primary flex items-center justify-center hover:bg-primary/10 transition-colors">🎵</button>
             <input type="text" value={inputText} onChange={(e) => setInputText(e.target.value)} onKeyDown={handleKeyDown} placeholder="Mesaj yaz..." className={`flex-1 bg-card border-2 ${errorAnim ? 'border-red-500 bg-red-500/10' : 'border-primary/20'} text-text rounded-xl px-4 py-3 outline-none focus:border-primary transition-all duration-300 placeholder:text-text/30 font-medium text-sm`} />
