@@ -23,6 +23,10 @@ export default function FloatingChat() {
   const [inputText, setInputText] = useState("");
   const [errorAnim, setErrorAnim] = useState(false);
   const [showMemeMenu, setShowMemeMenu] = useState(false);
+  
+  // YENİ: Ekrana hata durumlarını basmak için sistem mesajı
+  const [debugMsg, setDebugMsg] = useState<string>(""); 
+  
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const [messages, setMessages] = useState<Message[]>([]);
@@ -83,25 +87,37 @@ export default function FloatingChat() {
     return () => { supabase.removeChannel(channel); };
   }, []);
 
-  // YENİ: MANUEL BİLDİRİM KAYIT BUTONU
+  // YENİ: AŞAMALI VE EKRAN ÇIKTILARIYLA BİLDİRİM KAYDETME
   const handleEnableNotifications = async () => {
     try {
-      if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-        alert("Tarayıcınız bildirimleri desteklemiyor.");
+      setDebugMsg("Sistem kontrol ediliyor...");
+      
+      if (!('serviceWorker' in navigator)) {
+        setDebugMsg("HATA: Service Worker desteklenmiyor.");
+        return;
+      }
+      
+      if (!('PushManager' in window)) {
+        setDebugMsg("HATA: PushManager Yok! (iPhone kullanıyorsan uygulamayı Safari'den değil, Ana Ekrana Ekleyerek açman ŞART!)");
         return;
       }
 
+      setDebugMsg("Telefon İzin Penceresi Bekleniyor (İzin Ver'e Bas)...");
       const permission = await Notification.requestPermission();
       
+      setDebugMsg(`İzin durumu: ${permission}`);
+      
       if (permission === 'granted') {
+        setDebugMsg("Arka plan motoruna (SW) bağlanılıyor...");
         const registration = await navigator.serviceWorker.ready;
         const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
         
         if (!vapidPublicKey) {
-          alert("HATA: VAPID Key eksik! Vercel ayarlarını kontrol et."); 
+          setDebugMsg("HATA: VAPID Key bulunamadı (Vercel ayarlarına bak)."); 
           return;
         }
 
+        setDebugMsg("Telefon için cihaz şifresi üretiliyor...");
         const convertedVapidKey = urlBase64ToUint8Array(vapidPublicKey);
         let subscription = await registration.pushManager.getSubscription();
         
@@ -114,10 +130,11 @@ export default function FloatingChat() {
 
         const savedName = localStorage.getItem("myName");
         if (!savedName) {
-          alert("İsim bulunamadı, lütfen çıkış yapıp tekrar Efsun olarak girin."); 
+          setDebugMsg("HATA: İsim bulunamadı."); 
           return;
         }
 
+        setDebugMsg("Veritabanına (Supabase) gönderiliyor...");
         const subString = JSON.stringify(subscription);
         
         const { error } = await supabase.from('push_subscriptions').insert([{ 
@@ -126,16 +143,16 @@ export default function FloatingChat() {
         }]);
 
         if (error) {
-          alert("Veritabanı Hatası: " + error.message);
+          setDebugMsg("Veritabanı Hatası: " + error.message);
         } else {
-          alert("✅ HARİKA! Bildirimler başarıyla açıldı ve veritabanına Efsun olarak kaydedildi!");
+          setDebugMsg("✅ BAŞARILI! Cihaz Efsun olarak kaydedildi. Artık test edebilirsin!");
         }
         
       } else {
-        alert("Bildirim izni vermedin veya telefon ayarlardan engelliyor.");
+        setDebugMsg("HATA: İzin verilmedi veya telefon engelledi.");
       }
-    } catch (err) {
-      alert("Bir hata oluştu: " + err);
+    } catch (err: any) {
+      setDebugMsg("Kritik Hata: " + err.message);
     }
   };
 
@@ -189,35 +206,45 @@ export default function FloatingChat() {
       {isOpen && (
         <div className="bg-card border border-primary/20 rounded-[32px] shadow-2xl flex flex-col overflow-hidden w-[calc(100vw-3rem)] sm:w-[350px] h-[65dvh] sm:h-[500px] mb-2 sm:mb-4 animate-in slide-in-from-bottom-5">
           
-          <div className="bg-primary/10 border-b border-primary/20 p-4 flex justify-between items-center backdrop-blur-md">
-            <div>
-              <h3 className="display-font text-lg text-primary">Özel Sohbet 💬</h3>
-              <p className="text-[9px] uppercase tracking-widest text-primary/60 font-bold">Uçtan Uca Aşk Korumalı</p>
-            </div>
+          <div className="bg-primary/10 border-b border-primary/20 p-4 flex flex-col gap-3 backdrop-blur-md">
             
-            <div className="flex items-center gap-2">
-              {/* YENİ: BİLDİRİM KAYDETME BUTONU */}
-              <button 
-                onClick={handleEnableNotifications}
-                className="w-8 h-8 flex items-center justify-center bg-blue-500/20 text-blue-500 rounded-full hover:bg-blue-500 hover:text-white transition-colors text-sm shadow-sm"
-                title="Bildirimleri Aç ve Kaydet"
-              >
-                🔔
-              </button>
+            <div className="flex justify-between items-center">
+              <div>
+                <h3 className="display-font text-lg text-primary">Özel Sohbet 💬</h3>
+                <p className="text-[9px] uppercase tracking-widest text-primary/60 font-bold">Uçtan Uca Aşk Korumalı</p>
+              </div>
+              
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={handleEnableNotifications}
+                  className="w-8 h-8 flex items-center justify-center bg-blue-500 text-white rounded-full hover:bg-blue-600 transition-colors shadow-lg active:scale-95"
+                  title="Bildirimleri Aç ve Kaydet"
+                >
+                  🔔
+                </button>
 
-              <button 
-                onClick={() => { localStorage.clear(); sessionStorage.clear(); window.location.replace('/'); }}
-                className="text-[10px] bg-red-500/20 text-red-500 px-2 py-1 rounded-lg font-bold hover:bg-red-500 hover:text-white transition-colors"
-              >
-                Çıkış
-              </button>
-              <button 
-                onClick={() => setIsOpen(false)} 
-                className="w-8 h-8 flex items-center justify-center bg-card rounded-full text-primary hover:bg-primary hover:text-background transition-colors font-bold shadow-sm"
-              >
-                ✕
-              </button>
+                <button 
+                  onClick={() => { localStorage.clear(); sessionStorage.clear(); window.location.replace('/'); }}
+                  className="text-[10px] bg-red-500/20 text-red-500 px-2 py-1 rounded-lg font-bold hover:bg-red-500 hover:text-white transition-colors"
+                >
+                  Çıkış
+                </button>
+                <button 
+                  onClick={() => setIsOpen(false)} 
+                  className="w-8 h-8 flex items-center justify-center bg-card rounded-full text-primary hover:bg-primary hover:text-background transition-colors font-bold shadow-sm"
+                >
+                  ✕
+                </button>
+              </div>
             </div>
+
+            {/* YENİ: SİSTEM MONİTÖRÜ (Hata ve Onay mesajları burada çıkacak) */}
+            {debugMsg && (
+              <div className="bg-black/80 text-green-400 p-2 rounded-lg text-xs font-mono break-words shadow-inner border border-green-500/30">
+                &gt; {debugMsg}
+              </div>
+            )}
+            
           </div>
 
           <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4 relative">
