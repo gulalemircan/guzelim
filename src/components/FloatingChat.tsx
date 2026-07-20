@@ -108,11 +108,13 @@ export default function FloatingChat() {
       if (permission === 'granted') {
         
         setDebugMsg("Motor kuruluyor...");
-        await navigator.serviceWorker.register('/sw.js');
+        const registration = await navigator.serviceWorker.register('/sw.js');
         
-        // YENİ: Kodun hızını kesip motorun TAM OLARAK aktif olmasını bekliyoruz!
+        setDebugMsg("Telefondaki eski bozuk motor siliniyor...");
+        await registration.update(); // YENİ: Eğer telefonda takılı kalmış bir SW varsa onu zorla ezer!
+        
         setDebugMsg("Motorun tam aktif olması bekleniyor...");
-        const registration = await navigator.serviceWorker.ready; 
+        await navigator.serviceWorker.ready; 
         
         const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
         
