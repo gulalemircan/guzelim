@@ -21,6 +21,17 @@ export default function MomentsPage() {
 
   useEffect(() => {
     fetchData();
+
+    // ÇÖZÜM BURADA: Diğer cihazlardan (PC/Telefon) gelen güncellemeleri anında dinleyen canlı telsiz!
+    const channel = supabase.channel('realtime-moments')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'watch_list' }, () => fetchData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'todo_list' }, () => fetchData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'photos' }, () => fetchData())
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const fetchData = async () => {
@@ -35,29 +46,19 @@ export default function MomentsPage() {
     if (pics.data) setPhotos(pics.data);
   };
 
-  // ÇÖZÜM: Optimistic UI ile "Bekleme Yok, Anında Ekrana Bas" Mantığı
   const handleAdd = async (type: 'watch' | 'todo') => {
     playSound("list_add"); 
     
     if (type === 'watch' && newWatch.trim()) {
       const text = newWatch;
-      setNewWatch(""); // 1. Input'u anında temizle
-      
-      // 2. Veritabanını beklemeden ekrana ANINDA (0 saniye) bas
+      setNewWatch(""); 
       setWatchList(prev => [...prev, { id: Date.now(), text, completed: false }]); 
-      
-      // 3. Arka planda hissettirmeden kaydet ve gerçek ID'yi almak için yenile
       await supabase.from('watch_list').insert([{ text, completed: false }]);
-      fetchData();
-      
     } else if (type === 'todo' && newTodo.trim()) {
       const text = newTodo;
       setNewTodo(""); 
-      
       setTodoList(prev => [...prev, { id: Date.now(), text, completed: false }]);
-      
       await supabase.from('todo_list').insert([{ text, completed: false }]);
-      fetchData();
     }
   };
 
@@ -66,10 +67,8 @@ export default function MomentsPage() {
     const setList = type === 'watch' ? setWatchList : setTodoList;
     const table = type === 'watch' ? 'watch_list' : 'todo_list';
     
-    // Anında ekranda değiştir (0 saniye)
     setList(prev => prev.map(item => item.id === id ? { ...item, completed: !item.completed } : item));
     
-    // Arka planda veritabanına kaydet
     const list = type === 'watch' ? watchList : todoList;
     const item = list.find(i => i.id === id);
     if (item) {
@@ -82,10 +81,7 @@ export default function MomentsPage() {
     const table = editingItem.type === 'watch' ? 'watch_list' : 'todo_list';
     const setList = editingItem.type === 'watch' ? setWatchList : setTodoList;
     
-    // Anında ekranda değiştir
     setList(prev => prev.map(item => item.id === editingItem.id ? { ...item, text: editingItem.text } : item));
-    
-    // Arka planda kaydet
     await supabase.from(table).update({ text: editingItem.text }).eq('id', editingItem.id);
     setEditingItem(null);
   };
@@ -94,14 +90,11 @@ export default function MomentsPage() {
     if (!confirmModal.id) return;
     let table = '';
     
-    // Anında ekrandan sil
     if (confirmModal.type === 'watch') { table = 'watch_list'; setWatchList(prev => prev.filter(i => i.id !== confirmModal.id)); }
     else if (confirmModal.type === 'todo') { table = 'todo_list'; setTodoList(prev => prev.filter(i => i.id !== confirmModal.id)); }
     else if (confirmModal.type === 'photo') { table = 'photos'; setPhotos(prev => prev.filter(i => i.id !== confirmModal.id)); }
 
     setConfirmModal({ isOpen: false, type: 'watch', id: null });
-    
-    // Arka planda veritabanından sil
     await supabase.from(table).delete().eq('id', confirmModal.id);
   };
 
@@ -113,12 +106,8 @@ export default function MomentsPage() {
           playSound("photo_add"); 
           const tempPhotoUrl = event.target.result as string;
           
-          // ÇÖZÜM: Fotoğrafı veritabanına atmadan önce ANINDA (0 saniye) ekrana basıyoruz
           setPhotos(prev => [...prev, { id: Date.now(), url: tempPhotoUrl, note: "" }]);
-          
-          // Arka planda veritabanına at ve sonra sessizce yenile
           await supabase.from('photos').insert([{ url: tempPhotoUrl, note: "" }]);
-          fetchData();
         }
       };
       reader.readAsDataURL(e.target.files[0]);
