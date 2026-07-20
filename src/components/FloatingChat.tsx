@@ -90,19 +90,13 @@ export default function FloatingChat() {
     try {
       setDebugMsg("Sistem kontrol ediliyor...");
       
-      if (!('serviceWorker' in navigator)) {
-        setDebugMsg("HATA: Service Worker desteklenmiyor.");
-        return;
-      }
-      
-      if (!('PushManager' in window)) {
-        setDebugMsg("HATA: PushManager Yok! (Ana Ekrana Eklemedin veya iPhone engelliyor)");
+      if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+        setDebugMsg("HATA: Push API Yok! (Ana Ekrana Eklemedin veya telefon engelliyor)");
         return;
       }
 
       setDebugMsg("Telefon İzin Penceresi Bekleniyor...");
       const permission = await Notification.requestPermission();
-      
       setDebugMsg(`İzin durumu: ${permission}`);
       
       if (permission === 'granted') {
@@ -110,11 +104,21 @@ export default function FloatingChat() {
         setDebugMsg("Motor kuruluyor...");
         const registration = await navigator.serviceWorker.register('/sw.js');
         
-        setDebugMsg("Telefondaki eski bozuk motor siliniyor...");
-        await registration.update(); // YENİ: Eğer telefonda takılı kalmış bir SW varsa onu zorla ezer!
-        
-        setDebugMsg("Motorun tam aktif olması bekleniyor...");
+        setDebugMsg("Motorun uyanması bekleniyor...");
         await navigator.serviceWorker.ready; 
+        
+        // YENİ: MOBİL İÇİN KRİTİK ZAMANLAMA KONTROLÜ
+        // Telefon motoru uykuda bırakmışsa onu zorla 2 saniye bekletiyoruz.
+        if (!registration.active) {
+          setDebugMsg("Motor yavaş uyandı, ısınması için zorla bekletiliyor...");
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+
+        // 2 saniye sonra hala aktif değilse sistemi uyar
+        if (!registration.active) {
+          setDebugMsg("HATA: Telefon arka plan motorunu aktif edemedi. Uygulamayı silip baştan Ana Ekrana ekle.");
+          return;
+        }
         
         const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
         
@@ -154,7 +158,7 @@ export default function FloatingChat() {
           if (error) {
             setDebugMsg("Veritabanı Hatası: " + error.message);
           } else {
-            setDebugMsg("✅ BAŞARILI! Cihaz Efsun olarak kaydedildi.");
+            setDebugMsg("✅ BAŞARILI! Cihaz kaydedildi.");
           }
         } catch (subError: any) {
           setDebugMsg("Abonelik Hatası: " + subError.message);
