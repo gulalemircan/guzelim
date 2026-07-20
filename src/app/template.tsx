@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
+import { playSound } from "@/utils/audio"; // Ses motorumuzu buraya geri çağırdık
 
 export default function Template({ children }: { children: React.ReactNode }) {
   const [isDoorsClosed, setIsDoorsClosed] = useState(true);
@@ -10,12 +11,18 @@ export default function Template({ children }: { children: React.ReactNode }) {
     setIsDoorsClosed(true);
     setShowLilies(false);
 
-    // 300ms sonra kapıları aç ve lilyumları düşür
+    // 300ms sonra kapıları aç, lilyumları düşür ve sesi çal
     const timer1 = setTimeout(() => {
       setIsDoorsClosed(false);
       setShowLilies(true);
-      // MOBİL DÜZELTMESİ: Otomatik açılış sesi (playSound) buradan kaldırıldı.
-      // Çünkü telefonlar kullanıcı ekrana dokunmadan otomatik ses çalınırsa tüm siteyi kilitliyor.
+      
+      // ÇÖZÜM: Kullanıcı ekrana dokunmuşsa ses çalar, ilk girişte dokunmadıysa siteyi kilitletmeden sessizce geçer
+      try {
+        playSound("page_turn"); // Sayfa geçiş sesinin adı neyse buraya onu yazabilirsin (örn: "door_open", "click" vb.)
+      } catch (error) {
+        console.log("İlk açılışta ses engellendi, sonraki sayfalarda çalacak.");
+      }
+      
     }, 300);
 
     // Zambaklar hızlıca düşüp bittikten sonra DOM'u temizle
@@ -36,8 +43,8 @@ export default function Template({ children }: { children: React.ReactNode }) {
         className="fixed top-0 left-0 w-1/2 h-full bg-card border-r-2 border-primary/30 z-[999] shadow-[10px_0_20px_rgba(0,0,0,0.5)] transition-transform duration-[800ms] ease-in-out flex items-center justify-end"
         style={{
           transform: isDoorsClosed ? 'translateX(0)' : 'translateX(-110%)',
-          willChange: 'transform', /* Telefonda kasma yapmasını engeller */
-          pointerEvents: isDoorsClosed ? 'auto' : 'none' /* Kapı açılınca ekrana tıklanabilmesini garantiler */
+          willChange: 'transform', 
+          pointerEvents: isDoorsClosed ? 'auto' : 'none' 
         }}
       >
         <div className="text-primary text-3xl font-bold tracking-widest mr-4 display-font">E &</div>

@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { playSound } from "@/utils/audio";
+import { playSound } from "@/utils/audio"; 
 
 const QUICK_ICONS = ["👗", "👚", "🥿", "👠", "💍", "💄", "🧴", "🧸", "🥤", "👜", "🕶️", "🎀"];
 const CLOSET_ICONS = ["🚪", "👠", "👞", "👟", "👜", "🎒", "💍", "👑", "🧥", "👖", "🎁", "✨"];
@@ -41,34 +41,42 @@ export default function PrincessClosetPage() {
   const saveCloset = async () => {
     if (!closetNameInput.trim()) return;
     playSound("success");
-    if (closetModalMode === "create") await supabase.from('closets').insert([{ name: closetNameInput, icon: closetIconInput }]);
-    else await supabase.from('closets').update({ name: closetNameInput, icon: closetIconInput }).eq('id', editingClosetId);
-    setIsClosetModalOpen(false); fetchData();
+    if (closetModalMode === "create") {
+      await supabase.from('closets').insert([{ name: closetNameInput, icon: closetIconInput }]);
+    } else {
+      await supabase.from('closets').update({ name: closetNameInput, icon: closetIconInput }).eq('id', editingClosetId);
+    }
+    setIsClosetModalOpen(false); 
+    fetchData();
   };
 
   const hangItem = async () => {
     if (!activeClosetId || addingIndex === null) return;
-    playSound("photo_add"); // YENİ SES: Fotoğraf / Ürün ekleme
+    playSound("photo_add"); 
     await supabase.from('closet_items').insert([{ closet_id: activeClosetId, name: newItemName, icon: newItemIcon, link: newItemLink }]);
-    setAddingIndex(null); setNewItemName(""); fetchData();
+    setAddingIndex(null); 
+    setNewItemName(""); 
+    fetchData(); // Ekler eklemez tekrar çekecek
   };
 
   const confirmDeleteCloset = async () => {
     await supabase.from('closets').delete().eq('id', closetToDelete);
-    setClosetToDelete(null); fetchData();
+    setClosetToDelete(null); 
+    fetchData();
   };
 
   const confirmDeleteItem = async () => {
     const item = closets.find(c => c.id === activeClosetId)?.items[itemToDelete!];
     if (item) await supabase.from('closet_items').delete().eq('id', item.id);
-    setItemToDelete(null); fetchData();
+    setItemToDelete(null); 
+    fetchData();
   };
 
   const openCreateClosetModal = () => { playSound("click"); setClosetModalMode("create"); setClosetNameInput(""); setClosetIconInput("🚪"); setIsClosetModalOpen(true); };
   const openEditClosetModal = (e: any, c: any) => { e.stopPropagation(); playSound("click"); setEditingClosetId(c.id); setClosetNameInput(c.name); setClosetIconInput(c.icon || "🚪"); setIsClosetModalOpen(true); setClosetModalMode("edit"); };
   
   const openCloset = (id: string) => { 
-    playSound("wardrobe_open"); // YENİ SES: Dolap Açma
+    playSound("wardrobe_open"); 
     setActiveClosetId(id); 
     setPhase("closet"); 
     setIsDoorsClosed(true); 
@@ -76,7 +84,7 @@ export default function PrincessClosetPage() {
   };
   
   const closeCloset = () => { 
-    playSound("wardrobe_close"); // YENİ SES: Dolap Kapatma
+    playSound("wardrobe_close"); 
     setIsDoorsClosed(true); 
     setTimeout(() => setPhase("lobby"), 500); 
   };
@@ -119,16 +127,17 @@ export default function PrincessClosetPage() {
                 className="bg-card border-2 border-primary/20 rounded-3xl p-5 shadow-xl hover:scale-[1.02] hover:border-primary/60 transition-all cursor-pointer relative group flex flex-col justify-between min-h-[160px]"
                 style={{ backgroundImage: 'linear-gradient(to bottom right, rgba(0,0,0,0.1), transparent)' }}
               >
-                <div className="absolute top-3 right-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                {/* ÇÖZÜM: Mobilde ikonların sürekli görünmesini sağladık */}
+                <div className="absolute top-3 right-3 flex gap-2 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
                   <button 
                     onClick={(e) => openEditClosetModal(e, closet)}
-                    className="bg-background/80 text-primary w-8 h-8 rounded-full flex items-center justify-center hover:bg-primary hover:text-background transition-colors shadow-sm"
+                    className="bg-background/90 text-primary w-8 h-8 rounded-full flex items-center justify-center hover:bg-primary hover:text-background transition-colors shadow-sm"
                   >
                     ✏️
                   </button>
                   <button 
                     onClick={(e) => requestDeleteCloset(e, closet.id)}
-                    className="bg-background/80 text-red-500 w-8 h-8 rounded-full flex items-center justify-center hover:bg-red-500 hover:text-white transition-colors shadow-sm"
+                    className="bg-background/90 text-red-500 w-8 h-8 rounded-full flex items-center justify-center hover:bg-red-500 hover:text-white transition-colors shadow-sm"
                   >
                     ✖
                   </button>
@@ -195,9 +204,10 @@ export default function PrincessClosetPage() {
                         <span className="text-4xl drop-shadow-md">{item.icon}</span>
                         <span className="text-[10px] font-bold text-primary mt-2 uppercase tracking-widest text-center px-1 truncate w-full">{item.name}</span>
                         
+                        {/* ÇÖZÜM: Ürün silme butonu mobilde de görünür kılındı */}
                         <button 
                           onClick={(e) => requestDeleteItem(e, index)}
-                          className="absolute -top-2 -right-2 bg-red-500 text-white w-7 h-7 rounded-full text-xs font-bold shadow-lg opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center z-20 hover:scale-110"
+                          className="absolute -top-2 -right-2 bg-red-500 text-white w-7 h-7 rounded-full text-xs font-bold shadow-lg opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity flex items-center justify-center z-20 hover:scale-110"
                         >
                           ✖
                         </button>

@@ -1,14 +1,12 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { playSound } from "@/utils/audio"; // YENİ EKLENDİ
+import { playSound } from "@/utils/audio";
 
-// --- TİPLER ---
 type ListItem = { id: number; text: string; completed: boolean };
 type PhotoItem = { id: number; url: string; note: string };
 
 export default function MomentsPage() {
-  // --- STATE'LER ---
   const [watchList, setWatchList] = useState<ListItem[]>([]);
   const [newWatch, setNewWatch] = useState("");
 
@@ -21,7 +19,6 @@ export default function MomentsPage() {
   const [editingItem, setEditingItem] = useState<{ id: number; type: 'watch' | 'todo'; text: string } | null>(null);
   const [confirmModal, setConfirmModal] = useState<{ isOpen: boolean; type: 'watch' | 'todo' | 'photo'; id: number | null }>({ isOpen: false, type: 'watch', id: null });
 
-  // --- SUPABASE VERİ ÇEKME ---
   useEffect(() => {
     fetchData();
   }, []);
@@ -38,48 +35,62 @@ export default function MomentsPage() {
     if (pics.data) setPhotos(pics.data);
   };
 
-  // --- FONKSİYONLAR ---
+  // ÇÖZÜM: Veriyi eklerken sayfa yenilemeye gerek kalmadan anında ekrana basıyoruz (.select() ile)
   const handleAdd = async (type: 'watch' | 'todo') => {
-    playSound("list_add"); // YENİ SES TETİKLEYİCİSİ
+    playSound("list_add"); 
     if (type === 'watch' && newWatch.trim()) {
-      await supabase.from('watch_list').insert([{ text: newWatch, completed: false }]);
+      const { data } = await supabase.from('watch_list').insert([{ text: newWatch, completed: false }]).select();
+      if (data) setWatchList([...watchList, data[0]]);
       setNewWatch("");
     } else if (type === 'todo' && newTodo.trim()) {
-      await supabase.from('todo_list').insert([{ text: newTodo, completed: false }]);
+      const { data } = await supabase.from('todo_list').insert([{ text: newTodo, completed: false }]).select();
+      if (data) setTodoList([...todoList, data[0]]);
       setNewTodo("");
     }
-    fetchData();
   };
 
   const toggleComplete = async (type: 'watch' | 'todo', id: number) => {
-    playSound("list_tick"); // YENİ SES TETİKLEYİCİSİ
+    playSound("list_tick"); 
+    const setList = type === 'watch' ? setWatchList : setTodoList;
+    const table = type === 'watch' ? 'watch_list' : 'todo_list';
+    
+    // Anında ekranda değiştir
+    setList(prev => prev.map(item => item.id === id ? { ...item, completed: !item.completed } : item));
+    
+    // Arka planda veritabanına kaydet
     const list = type === 'watch' ? watchList : todoList;
     const item = list.find(i => i.id === id);
-    if (!item) return;
-
-    const table = type === 'watch' ? 'watch_list' : 'todo_list';
-    await supabase.from(table).update({ completed: !item.completed }).eq('id', id);
-    fetchData();
+    if (item) {
+      await supabase.from(table).update({ completed: !item.completed }).eq('id', id);
+    }
   };
 
   const saveEdit = async () => {
     if (!editingItem) return;
     const table = editingItem.type === 'watch' ? 'watch_list' : 'todo_list';
+    const setList = editingItem.type === 'watch' ? setWatchList : setTodoList;
+    
+    // Anında ekranda değiştir
+    setList(prev => prev.map(item => item.id === editingItem.id ? { ...item, text: editingItem.text } : item));
+    
+    // Arka planda kaydet
     await supabase.from(table).update({ text: editingItem.text }).eq('id', editingItem.id);
     setEditingItem(null);
-    fetchData();
   };
 
   const confirmDelete = async () => {
     if (!confirmModal.id) return;
     let table = '';
-    if (confirmModal.type === 'watch') table = 'watch_list';
-    else if (confirmModal.type === 'todo') table = 'todo_list';
-    else if (confirmModal.type === 'photo') table = 'photos';
+    
+    // Anında ekrandan sil
+    if (confirmModal.type === 'watch') { table = 'watch_list'; setWatchList(prev => prev.filter(i => i.id !== confirmModal.id)); }
+    else if (confirmModal.type === 'todo') { table = 'todo_list'; setTodoList(prev => prev.filter(i => i.id !== confirmModal.id)); }
+    else if (confirmModal.type === 'photo') { table = 'photos'; setPhotos(prev => prev.filter(i => i.id !== confirmModal.id)); }
 
-    await supabase.from(table).delete().eq('id', confirmModal.id);
     setConfirmModal({ isOpen: false, type: 'watch', id: null });
-    fetchData();
+    
+    // Arka planda veritabanından sil
+    await supabase.from(table).delete().eq('id', confirmModal.id);
   };
 
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -87,9 +98,11 @@ export default function MomentsPage() {
       const reader = new FileReader();
       reader.onload = async (event) => {
         if (event.target?.result) {
-          playSound("photo_add"); // FOTOĞRAF EKLENDİĞİNDE DE SES ÇALSIN
-          await supabase.from('photos').insert([{ url: event.target.result as string, note: "" }]);
-          fetchData();
+          playSound("photo_add"); 
+          
+          // ÇÖZÜM: Fotoğrafı veritabanına atıp dönen sonucu anında ekrana yansıtıyoruz
+          const { data } = await supabase.from('photos').insert([{ url: event.target.result as string, note: "" }]).select();
+          if (data) setPhotos([...photos, data[0]]);
         }
       };
       reader.readAsDataURL(e.target.files[0]);
@@ -260,9 +273,10 @@ export default function MomentsPage() {
               {photos.map(photo => (
                 <div key={photo.id} className="bg-background border border-primary/20 rounded-2xl p-4 flex flex-col group relative shadow-md hover:shadow-xl transition-all">
                   
+                  {/* ÇÖZÜM: opacity-100 md:opacity-0 md:group-hover:opacity-100 ile mobilde hep görünür yapıldı */}
                   <button 
                     onClick={() => setConfirmModal({ isOpen: true, type: 'photo', id: photo.id })}
-                    className="absolute top-6 right-6 w-8 h-8 bg-red-500/90 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10 hover:bg-red-600 shadow-lg"
+                    className="absolute top-6 right-6 w-8 h-8 bg-red-500/90 text-white rounded-full flex items-center justify-center opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity z-10 hover:bg-red-600 shadow-lg"
                     title="Fotoğrafı Sil"
                   >
                     ✕
