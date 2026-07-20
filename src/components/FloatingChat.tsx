@@ -125,7 +125,7 @@ export default function FloatingChat() {
       if (!customText) setInputText("");
       setShowMemeMenu(false);
 
-      // YENİ: API ÜZERİNDEN BİLDİRİMİ ATEŞLE
+      // API ÜZERİNDEN BİLDİRİMİ ATEŞLE
       const targetName = currentUser === "Emircan" ? "Efsun" : "Emircan";
       let notificationText = textToSend;
       
@@ -168,10 +168,14 @@ export default function FloatingChat() {
               <p className="text-[9px] uppercase tracking-widest text-primary/60 font-bold">Uçtan Uca Aşk Korumalı</p>
             </div>
             
-            {/* GİZLİ ÇIKIŞ YAP BUTONU */}
+            {/* GİZLİ ÇIKIŞ YAP BUTONU (GÜÇLENDİRİLMİŞ) */}
             <div className="flex items-center gap-2">
               <button 
-                onClick={() => { localStorage.removeItem("myName"); window.location.reload(); }}
+                onClick={() => { 
+                  localStorage.clear(); 
+                  sessionStorage.clear(); 
+                  window.location.replace('/'); 
+                }}
                 className="text-[10px] bg-red-500/20 text-red-500 px-2 py-1 rounded-lg font-bold hover:bg-red-500 hover:text-white transition-colors"
               >
                 Çıkış
