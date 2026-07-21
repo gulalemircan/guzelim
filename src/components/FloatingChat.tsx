@@ -34,7 +34,7 @@ export default function FloatingChat() {
     if (savedName) setCurrentUser(savedName);
   }, [isOpen]);
 
-  // YENİ: Arka planda motoru sessizce kur (Ekrana veya loglara yazı yazmaz, tertemiz)
+  // Arka planda motoru sessizce kur (Ekrana veya loglara yazı yazmaz, tertemiz)
   useEffect(() => {
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js').catch(console.error);
@@ -103,7 +103,7 @@ export default function FloatingChat() {
     };
   }, []);
 
-  // YENİ: SADECE ZİLE BASINCA ÇALIŞAN TERTEMİZ BİLDİRİM KAYIT KODU
+  // SADECE ZİLE BASINCA ÇALIŞAN TERTEMİZ BİLDİRİM KAYIT KODU
   const handleEnableNotifications = async () => {
     try {
       const permission = await Notification.requestPermission();
@@ -213,7 +213,6 @@ export default function FloatingChat() {
               <p className="text-[9px] uppercase tracking-widest text-primary/60 font-bold">Uçtan Uca Aşk Korumalı</p>
             </div>
             
-            {/* YENİ: ZİL VE ÇIKIŞ BUTONLARI EKLENDİ */}
             <div className="flex items-center gap-2">
               <button 
                 onClick={handleEnableNotifications} 
@@ -221,12 +220,6 @@ export default function FloatingChat() {
                 title="Bildirimleri Aç"
               >
                 🔔
-              </button>
-              <button 
-                onClick={() => { localStorage.clear(); sessionStorage.clear(); window.location.replace('/'); }} 
-                className="text-[10px] bg-red-500/20 text-red-500 px-2 py-1 rounded-lg font-bold hover:bg-red-500 hover:text-white transition-colors"
-              >
-                Çıkış
               </button>
               <button 
                 onClick={() => setIsOpen(false)} 
@@ -331,7 +324,7 @@ export default function FloatingChat() {
   );
 }
 
-// YENİ: Şifreleri telefonun anlayacağı formata çeviren yardımcı fonksiyon
+// Şifreleri telefonun anlayacağı formata çeviren yardımcı fonksiyon
 function urlBase64ToUint8Array(base64String: string) {
   const padding = '='.repeat((4 - base64String.length % 4) % 4);
   const base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
