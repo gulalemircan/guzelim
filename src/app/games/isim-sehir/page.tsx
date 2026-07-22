@@ -37,6 +37,9 @@ export default function IsimSehirPage() {
   const [phase, setPhase] = useState<"modeSelect" | "settings" | "countdown" | "playing" | "waitingRound" | "roundResult" | "finalResult">("modeSelect");
   const [playMode, setPlayMode] = useState<"single" | "multi" | null>(null);
   
+  // YENİ: Bekleme ekranının neden beklediğini bilmesi için
+  const [waitingReason, setWaitingReason] = useState<"finish" | "confirm">("finish");
+  
   const [isOpponentReady, setIsOpponentReady] = useState(false);
   const [isMeReady, setIsMeReady] = useState(false);
   const targetOpponent = currentUser === "Emircan" ? "Efsun" : "Emircan";
@@ -60,17 +63,20 @@ export default function IsimSehirPage() {
   const [isSaved, setIsSaved] = useState(false);
   const [winSaved, setWinSaved] = useState(false);
 
+  // KALICI BELLEKLER (Ref)
   const phaseRef = useRef(phase);
   const currentRoundRef = useRef(currentRound);
   const settingsRef = useRef(settings);
   const myTotalScoreRef = useRef(myTotalScore);
   const answersRef = useRef(answers);
+  const waitingReasonRef = useRef(waitingReason);
 
   useEffect(() => { phaseRef.current = phase; }, [phase]);
   useEffect(() => { currentRoundRef.current = currentRound; }, [currentRound]);
   useEffect(() => { settingsRef.current = settings; }, [settings]);
   useEffect(() => { myTotalScoreRef.current = myTotalScore; }, [myTotalScore]);
   useEffect(() => { answersRef.current = answers; }, [answers]);
+  useEffect(() => { waitingReasonRef.current = waitingReason; }, [waitingReason]);
 
   useEffect(() => {
     const savedName = localStorage.getItem("myName");
@@ -122,6 +128,7 @@ export default function IsimSehirPage() {
     }
   }, [phase, isSaved, winSaved, myTotalScore, opponentTotalScore, playMode, currentUser]);
 
+  // YENİ: KUSURSUZ SENKRONİZASYON (Kısır Döngü Kökünden Çözüldü!)
   useEffect(() => {
     if (playMode !== "multi") return;
 
@@ -129,7 +136,7 @@ export default function IsimSehirPage() {
       const opState = currentUser === "Emircan" ? data.p2_state : data.p1_state;
       const myState = currentUser === "Emircan" ? data.p1_state : data.p2_state;
       const currentPhase = phaseRef.current;
-      const currentSettings = settingsRef.current;
+      const round = currentRoundRef.current;
 
       if (opState?.ready) setIsOpponentReady(true);
       else setIsOpponentReady(false);
@@ -152,14 +159,12 @@ export default function IsimSehirPage() {
          setIsMeReady(false);
       }
 
-      if (data.status === 'countdown') {
-         if (currentPhase === 'roundResult') {
-             const finalVals = myState?.validations || {};
-             const roundScore = CATEGORIES.filter(c => currentSettings.selectedCategories.includes(c.id) && finalVals[c.id]).length * 10;
-             setMyTotalScore(prev => prev + roundScore);
-         }
-         
-         if (currentPhase !== 'countdown') {
+      // KISIR DÖNGÜYÜ ENGELLEYEN YER: Sadece round ilerlediyse veya lobi bittiyse sayaç başlar.
+      if (data.status === 'playing') {
+         const isNewGame = currentPhase === "settings" || currentPhase === "finalResult";
+         const isNextRound = data.shared_data?.round > round;
+
+         if (isNewGame || isNextRound) {
             setSettings(data.shared_data.settings);
             setCurrentRound(data.shared_data.round);
             setTargetLetter(data.shared_data.targetLetter);
@@ -167,30 +172,31 @@ export default function IsimSehirPage() {
             setOpponentAnswers({});
             setMyValidations({});
             setOpponentValidations({});
+            if (isNewGame) {
+                setMyTotalScore(0);
+                setOpponentTotalScore(0);
+            }
             setCountdownTime(3);
+            setWaitingReason("finish");
             setPhase("countdown");
             playSound("tick");
+            return; // Sayaç tetiklendiyse diğer kontrollere girme
+         }
+
+         // İKİ OYUNCU DA CEVAP YAZMAYI BİTİRDİYSE HAKEM MASASINA GEÇ
+         if (myState?.roundFinished && opState?.roundFinished) {
+            const wReason = waitingReasonRef.current;
+            if (currentPhase === 'playing' || (currentPhase === 'waitingRound' && wReason === 'finish')) {
+               setOpponentAnswers(opState.answers || {});
+               setPhase('roundResult');
+               playSound("success");
+            }
          }
       }
 
-      if (data.status === 'countdown' || data.status === 'playing') {
-          if (myState?.roundFinished && opState?.roundFinished && currentPhase === 'waitingRound') {
-             setOpponentAnswers(opState.answers || {});
-             setPhase('roundResult');
-             playSound("success");
-          }
-      }
-
-      if (data.status === 'game_over') {
-        if (currentPhase === 'roundResult') {
-            const finalVals = myState?.validations || {};
-            const roundScore = CATEGORIES.filter(c => currentSettings.selectedCategories.includes(c.id) && finalVals[c.id]).length * 10;
-            setMyTotalScore(prev => prev + roundScore);
-        }
-        if (currentPhase !== 'finalResult') {
-            setPhase('finalResult');
-            playSound("over");
-        }
+      if (data.status === 'game_over' && currentPhase !== 'finalResult') {
+         setPhase('finalResult');
+         playSound("over");
       }
     };
 
@@ -252,7 +258,7 @@ export default function IsimSehirPage() {
 
     const playerField = currentUser === "Emircan" ? "p1_state" : "p2_state";
     await supabase.from('multiplayer_state').update({ 
-        [playerField]: { joined: true, ready: false, roundFinished: false },
+        [playerField]: { joined: true, ready: false, roundFinished: false, nextRoundReady: false },
         ...(currentUser === "Emircan" ? { status: 'waiting' } : {}) 
     }).eq('id', 1);
   };
@@ -273,8 +279,8 @@ export default function IsimSehirPage() {
       if (data) {
         await supabase.from('multiplayer_state').update({ 
           status: 'waiting',
-          p1_state: { ...data.p1_state, ready: false, roundFinished: false },
-          p2_state: { ...data.p2_state, ready: false, roundFinished: false }
+          p1_state: { ...data.p1_state, ready: false, roundFinished: false, nextRoundReady: false },
+          p2_state: { ...data.p2_state, ready: false, roundFinished: false, nextRoundReady: false }
         }).eq('id', 1);
       }
     }
@@ -307,7 +313,7 @@ export default function IsimSehirPage() {
     
     const playerField = currentUser === "Emircan" ? "p1_state" : "p2_state";
     await supabase.from('multiplayer_state').update({
-      [playerField]: { joined: true, ready: newReadyState, roundFinished: false }
+      [playerField]: { joined: true, ready: newReadyState, roundFinished: false, nextRoundReady: false }
     }).eq('id', 1);
   };
 
@@ -322,11 +328,12 @@ export default function IsimSehirPage() {
     const initialLetter = getRandomLetter(settingsRef.current.selectedLetters, []);
     const newUsed = [initialLetter];
     
+    // YENİ: Başlarken de veritabanı playing modunda olur
     await supabase.from('multiplayer_state').update({
-      status: 'countdown',
+      status: 'playing',
       shared_data: { settings: { ...settingsRef.current, usedLetters: newUsed }, targetLetter: initialLetter, round: 1 },
-      p1_state: { joined: true, ready: true, roundFinished: false, totalScore: 0, answers: {}, validations: {} },
-      p2_state: { joined: true, ready: true, roundFinished: false, totalScore: 0, answers: {}, validations: {} }
+      p1_state: { joined: true, ready: true, roundFinished: false, nextRoundReady: false, totalScore: 0, answers: {}, validations: {} },
+      p2_state: { joined: true, ready: true, roundFinished: false, nextRoundReady: false, totalScore: 0, answers: {}, validations: {} }
     }).eq('id', 1);
   };
 
@@ -355,6 +362,7 @@ export default function IsimSehirPage() {
     });
 
     if (playMode === "multi") {
+      setWaitingReason("finish");
       setPhase("waitingRound");
       const playerField = currentUser === "Emircan" ? "p1_state" : "p2_state";
       
@@ -362,6 +370,7 @@ export default function IsimSehirPage() {
         joined: true, 
         ready: true, 
         roundFinished: true, 
+        nextRoundReady: false,
         answers: answersRef.current,
         validations: initialValidations,
         totalScore: myTotalScoreRef.current
@@ -399,6 +408,7 @@ export default function IsimSehirPage() {
     }
   };
 
+  // YENİ: İKİNİZ DE ONAY VERMEDEN ASLA DİĞER TURA GEÇMEZ
   const handleNext = async () => {
     playSound("click");
 
@@ -409,30 +419,40 @@ export default function IsimSehirPage() {
     setMyTotalScore(newTotal);
 
     if (playMode === "multi") {
+       setWaitingReason("confirm");
+       setPhase("waitingRound");
+
        const playerField = currentUser === "Emircan" ? "p1_state" : "p2_state";
+       const opField = currentUser === "Emircan" ? "p2_state" : "p1_state";
+       
        const { data: latestData } = await supabase.from('multiplayer_state').select('*').eq('id', 1).single();
        
        if (latestData) {
-          const opField = currentUser === "Emircan" ? "p2_state" : "p1_state";
-          const opFinalVals = opponentValidations;
-          const opRoundScore = CATEGORIES.filter(c => settingsRef.current.selectedCategories.includes(c.id) && opFinalVals[c.id]).length * 10;
-          const opNewTotal = (latestData[opField]?.totalScore || 0) + opRoundScore;
+          const opIsReady = latestData[opField]?.nextRoundReady;
+          const myNewState = { ...latestData[playerField], totalScore: newTotal, nextRoundReady: true };
 
-          if (currentRoundRef.current < settingsRef.current.rounds) {
-              const nextLetter = getRandomLetter(latestData.shared_data.settings.selectedLetters, latestData.shared_data.settings.usedLetters);
-              const newUsed = [...latestData.shared_data.settings.usedLetters, nextLetter];
-              
-              await supabase.from('multiplayer_state').update({
-                 status: 'countdown',
-                 shared_data: { ...latestData.shared_data, settings: { ...latestData.shared_data.settings, usedLetters: newUsed }, targetLetter: nextLetter, round: currentRoundRef.current + 1 },
-                 [playerField]: { ...latestData[playerField], totalScore: newTotal, roundFinished: false },
-                 [opField]: { ...latestData[opField], totalScore: opNewTotal, roundFinished: false }
-              }).eq('id', 1);
+          if (opIsReady) {
+              // İKİNİZ DE ONAY VERDİYSENİZ TURA GEÇİLİR!
+              if (currentRoundRef.current < settingsRef.current.rounds) {
+                  const nextLetter = getRandomLetter(latestData.shared_data.settings.selectedLetters, latestData.shared_data.settings.usedLetters);
+                  const newUsed = [...latestData.shared_data.settings.usedLetters, nextLetter];
+                  
+                  await supabase.from('multiplayer_state').update({
+                     shared_data: { ...latestData.shared_data, settings: { ...latestData.shared_data.settings, usedLetters: newUsed }, targetLetter: nextLetter, round: currentRoundRef.current + 1 },
+                     p1_state: { ...(currentUser === "Emircan" ? myNewState : latestData.p1_state), roundFinished: false, nextRoundReady: false },
+                     p2_state: { ...(currentUser === "Efsun" ? myNewState : latestData.p2_state), roundFinished: false, nextRoundReady: false }
+                  }).eq('id', 1);
+              } else {
+                  await supabase.from('multiplayer_state').update({ 
+                     status: 'game_over',
+                     p1_state: { ...(currentUser === "Emircan" ? myNewState : latestData.p1_state) },
+                     p2_state: { ...(currentUser === "Efsun" ? myNewState : latestData.p2_state) }
+                  }).eq('id', 1);
+              }
           } else {
-              await supabase.from('multiplayer_state').update({ 
-                 status: 'game_over',
-                 [playerField]: { ...latestData[playerField], totalScore: newTotal },
-                 [opField]: { ...latestData[opField], totalScore: opNewTotal }
+              // SADECE SEN ONAY VERDİYSEN VERİTABANINA "BEN HAZIRIM" YAZIP BEKLERSİN
+              await supabase.from('multiplayer_state').update({
+                 [playerField]: myNewState
               }).eq('id', 1);
           }
        }
@@ -710,16 +730,20 @@ export default function IsimSehirPage() {
         </div>
       )}
 
+      {/* YENİ: Bekleme nedenini ekrana yazan akıllı bekleme ekranı */}
       {phase === "waitingRound" && (
         <div className="flex-1 flex flex-col items-center justify-center animate-in zoom-in max-w-sm mx-auto w-full z-10">
           <div className="text-6xl mb-6 animate-spin drop-shadow-xl">⏳</div>
-          <h2 className="display-font text-3xl text-primary mb-2 text-center">Cevaplar Kaydedildi!</h2>
-          <p className="text-text/70 uppercase tracking-widest text-sm font-bold animate-pulse text-center">
-             {playMode === "multi" ? `${targetOpponent}'un bitirmesi bekleniyor...` : "Hakem masasına geçiliyor..."}
+          <h2 className="display-font text-3xl text-primary mb-2 text-center">İşlem Tamam!</h2>
+          <p className="text-text/70 uppercase tracking-widest text-sm font-bold animate-pulse text-center px-4">
+             {playMode === "multi" 
+               ? (waitingReason === "finish" ? `${targetOpponent}'un bitirmesi bekleniyor...` : `${targetOpponent}'un puanları onaylaması bekleniyor...`) 
+               : "Sonraki aşamaya geçiliyor..."}
           </p>
         </div>
       )}
 
+      {/* HAKEM MASASI */}
       {phase === "roundResult" && (
         <div className="flex-1 flex flex-col items-center animate-in slide-in-from-bottom-5 w-full max-w-md mx-auto z-10 pb-10 overflow-y-auto custom-scrollbar">
           <div className="text-xs uppercase tracking-widest text-primary font-bold mb-2 border border-primary/20 px-4 py-1 rounded-full bg-card shadow-sm mt-2">
