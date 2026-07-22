@@ -12,7 +12,7 @@ const GAMES = [
     id: "taboo", 
     name: "Tabu", 
     icon: "🗣️", 
-    desc: "Yasaklı kelimeleri kullanmadan Efsun'a anlat bakalım!" 
+    desc: "Yasaklı kelimeleri kullanmadan anlat bakalım!" 
   },
   { 
     id: "wordle", 
@@ -25,6 +25,12 @@ const GAMES = [
     name: "İsim Şehir", 
     icon: "🌍", 
     desc: "Kağıt kalemi bırakın, efsane klasiği buradan oynayın." 
+  },
+  { 
+    id: "ben-kimim", 
+    name: "Ben Kimim?", 
+    icon: "🎭", 
+    desc: "Yüz yüze oynamalık, bol kahkahalı dijital tahmin oyunu!" 
   }
 ];
 
@@ -50,7 +56,7 @@ export default function GamesPage() {
           <h2 className="display-font text-4xl text-primary tracking-wide">Oyun Odası</h2>
         </div>
 
-        {/* 2 SÜTUNLUK DEVASA KART SİSTEMİ (Boşlukları mükemmel doldurur) */}
+        {/* KART SİSTEMİ (Artık 5 oyunumuz var!) */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full">
           {GAMES.map((game) => (
             <Link 
