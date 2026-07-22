@@ -34,7 +34,8 @@ export default function IsimSehirPage() {
     usedLetters: [] as string[]
   });
 
-  const [phase, setPhase] = useState<"modeSelect" | "settings" | "playing" | "waitingRound" | "roundResult" | "finalResult">("modeSelect");
+  // YENİ: "countdown" (Geri sayım) aşaması eklendi!
+  const [phase, setPhase] = useState<"modeSelect" | "settings" | "countdown" | "playing" | "waitingRound" | "roundResult" | "finalResult">("modeSelect");
   const [playMode, setPlayMode] = useState<"single" | "multi" | null>(null);
   
   const [isOpponentReady, setIsOpponentReady] = useState(false);
@@ -45,13 +46,17 @@ export default function IsimSehirPage() {
   const [targetLetter, setTargetLetter] = useState("A");
   
   const [timeLeft, setTimeLeft] = useState(60);
+  const [countdownTime, setCountdownTime] = useState(3);
+
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [opponentAnswers, setOpponentAnswers] = useState<Record<string, string>>({});
   
+  // YENİ: Hakem (Puanlama Onay) State'leri
+  const [myValidations, setMyValidations] = useState<Record<string, boolean>>({});
+  const [opponentValidations, setOpponentValidations] = useState<Record<string, boolean>>({});
+  
   const [myTotalScore, setMyTotalScore] = useState(0);
   const [opponentTotalScore, setOpponentTotalScore] = useState(0);
-  const [myRoundScore, setMyRoundScore] = useState(0);
-  const [opponentRoundScore, setOpponentRoundScore] = useState(0);
 
   const [leaderboard, setLeaderboard] = useState({ emircan: 0, efsun: 0 });
   const [isSaved, setIsSaved] = useState(false);
@@ -126,13 +131,16 @@ export default function IsimSehirPage() {
       const opState = currentUser === "Emircan" ? data.p2_state : data.p1_state;
       const myState = currentUser === "Emircan" ? data.p1_state : data.p2_state;
       const currentPhase = phaseRef.current;
-      const round = currentRoundRef.current;
+      const currentSettings = settingsRef.current;
 
       if (opState?.ready) setIsOpponentReady(true);
       else setIsOpponentReady(false);
 
       if (opState?.totalScore !== undefined) setOpponentTotalScore(opState.totalScore);
-      if (opState?.currentScore !== undefined) setOpponentRoundScore(opState.currentScore);
+      
+      // Hakem State'leri Canlı Senkronize Ediliyor
+      if (myState?.validations) setMyValidations(myState.validations);
+      if (opState?.validations) setOpponentValidations(opState.validations);
 
       if (data.status === 'waiting' && (currentPhase === 'finalResult' || currentPhase === 'waitingRound' || currentPhase === 'roundResult')) {
          setPhase('settings');
@@ -140,48 +148,56 @@ export default function IsimSehirPage() {
          setOpponentTotalScore(0);
          setAnswers({});
          setOpponentAnswers({});
+         setMyValidations({});
+         setOpponentValidations({});
          setIsSaved(false);
          setWinSaved(false);
          setIsMeReady(false);
       }
 
-      if (data.status === 'playing') {
-        if (currentPhase === "settings") {
-          setSettings(data.shared_data.settings);
-          setCurrentRound(1);
-          setMyTotalScore(0);
-          setOpponentTotalScore(0);
-          setAnswers({});
-          setOpponentAnswers({});
-          setIsSaved(false);
-          setWinSaved(false);
-          setTargetLetter(data.shared_data.targetLetter);
-          setTimeLeft(data.shared_data.settings.timeLimit);
-          setPhase("playing");
-          playSound("start");
-        } 
-        else if (data.shared_data?.round > round) {
-          setCurrentRound(data.shared_data.round);
-          setTargetLetter(data.shared_data.targetLetter);
-          setAnswers({});
-          setOpponentAnswers({});
-          setTimeLeft(data.shared_data.settings.timeLimit);
-          setPhase("playing");
-          playSound("start");
-        }
-      }
-
-      if (data.status === 'playing' && myState?.roundFinished && opState?.roundFinished) {
-         setOpponentAnswers(opState.answers || {});
-         if (currentPhase === 'waitingRound') {
-            setPhase('roundResult');
-            playSound("success");
+      // YENİ: BAŞLAMA SİNYALİ GELDİĞİNDE DİREKT 3 SANİYELİK SAYACA GİRER
+      if (data.status === 'countdown') {
+         // Eğer tur sonucundan (roundResult) buraya geçiyorsak, önce o turun kesinleşmiş puanlarını topla!
+         if (currentPhase === 'roundResult') {
+             const finalVals = myState?.validations || {};
+             const roundScore = CATEGORIES.filter(c => currentSettings.selectedCategories.includes(c.id) && finalVals[c.id]).length * 10;
+             setMyTotalScore(prev => prev + roundScore);
+         }
+         
+         if (currentPhase !== 'countdown') {
+            setSettings(data.shared_data.settings);
+            setCurrentRound(data.shared_data.round);
+            setTargetLetter(data.shared_data.targetLetter);
+            setAnswers({});
+            setOpponentAnswers({});
+            setMyValidations({});
+            setOpponentValidations({});
+            setCountdownTime(3);
+            setPhase("countdown");
+            playSound("tick");
          }
       }
 
-      if (data.status === 'game_over' && currentPhase !== 'finalResult') {
-        setPhase('finalResult');
-        playSound("over");
+      // İKİ OYUNCU DA BİTİRDİĞİNDE HAKEM MASASINA (roundResult) GEÇER
+      if (data.status === 'countdown' || data.status === 'playing') {
+          if (myState?.roundFinished && opState?.roundFinished && currentPhase === 'waitingRound') {
+             setOpponentAnswers(opState.answers || {});
+             setPhase('roundResult');
+             playSound("success");
+          }
+      }
+
+      // OYUN BİTTİĞİNDE
+      if (data.status === 'game_over') {
+        if (currentPhase === 'roundResult') {
+            const finalVals = myState?.validations || {};
+            const roundScore = CATEGORIES.filter(c => currentSettings.selectedCategories.includes(c.id) && finalVals[c.id]).length * 10;
+            setMyTotalScore(prev => prev + roundScore);
+        }
+        if (currentPhase !== 'finalResult') {
+            setPhase('finalResult');
+            playSound("over");
+        }
       }
     };
 
@@ -202,6 +218,40 @@ export default function IsimSehirPage() {
     return () => { supabase.removeChannel(channel); };
   }, [playMode, currentUser]);
 
+  // YENİ: 3 SANİYE GERİ SAYIM MOTORU (Aynı Anda Başlamak İçin)
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (phase === "countdown") {
+      if (countdownTime > 0) {
+        timer = setTimeout(() => { 
+            setCountdownTime(c => c - 1); 
+            playSound("tick"); 
+        }, 1000);
+      } else {
+        setPhase("playing");
+        setTimeLeft(settings.timeLimit);
+        playSound("start");
+      }
+    }
+    return () => clearTimeout(timer);
+  }, [phase, countdownTime, settings.timeLimit]);
+
+  // SÜRE BİTİNCE VEYA MANUEL BİTİRİLİNCE
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (phase === "playing" && settings.timerMode === "timed") {
+      if (timeLeft > 0) {
+        timer = setTimeout(() => {
+          setTimeLeft(t => t - 1);
+          if (timeLeft <= 10) playSound("tick");
+        }, 1000);
+      } else {
+        finishRound();
+      }
+    }
+    return () => clearTimeout(timer);
+  }, [phase, timeLeft, settings.timerMode]);
+
   const joinMultiplayer = async () => {
     setPlayMode("multi");
     setPhase("settings");
@@ -210,9 +260,10 @@ export default function IsimSehirPage() {
     fetchLeaderboard();
 
     const playerField = currentUser === "Emircan" ? "p1_state" : "p2_state";
-    const updateData: any = { [playerField]: { joined: true, ready: false, roundFinished: false } };
-    if (currentUser === "Emircan") updateData.status = 'waiting';
-    await supabase.from('multiplayer_state').update(updateData).eq('id', 1);
+    await supabase.from('multiplayer_state').update({ 
+        [playerField]: { joined: true, ready: false, roundFinished: false },
+        ...(currentUser === "Emircan" ? { status: 'waiting' } : {}) 
+    }).eq('id', 1);
   };
 
   const returnToLobby = async () => {
@@ -281,10 +332,10 @@ export default function IsimSehirPage() {
     const newUsed = [initialLetter];
     
     await supabase.from('multiplayer_state').update({
-      status: 'playing',
+      status: 'countdown', // YENİ: Doğrudan countdown (geri sayım) aşamasına atlar
       shared_data: { settings: { ...settingsRef.current, usedLetters: newUsed }, targetLetter: initialLetter, round: 1 },
-      p1_state: { joined: true, ready: true, roundFinished: false, currentScore: 0, totalScore: 0, answers: {} },
-      p2_state: { joined: true, ready: true, roundFinished: false, currentScore: 0, totalScore: 0, answers: {} }
+      p1_state: { joined: true, ready: true, roundFinished: false, totalScore: 0, answers: {}, validations: {} },
+      p2_state: { joined: true, ready: true, roundFinished: false, totalScore: 0, answers: {}, validations: {} }
     }).eq('id', 1);
   };
 
@@ -299,29 +350,20 @@ export default function IsimSehirPage() {
     const initialLetter = getRandomLetter(settingsRef.current.selectedLetters, []);
     setSettings(prev => ({ ...prev, usedLetters: [initialLetter] }));
     setTargetLetter(initialLetter);
-    setTimeLeft(settingsRef.current.timeLimit);
-    setPhase("playing");
+    setCountdownTime(3);
+    setPhase("countdown");
   };
 
-  const calculateRoundScore = (userAnswers: Record<string, string>, target: string, activeCategories: string[]) => {
-    let score = 0;
-    activeCategories.forEach(cat => {
-      const val = (userAnswers[cat] || "").trim().toLocaleUpperCase('tr-TR');
-      if (val.length > 1 && val.startsWith(target)) {
-        score += 10;
-      }
-    });
-    return score;
-  };
-
+  // YENİ: TUR BİTİNCE OTOMATİK HAKEMLİK (Taslak Puanlaması Çıkarılır)
   const finishRound = async () => {
-    playSound("success");
-    const roundScore = calculateRoundScore(answersRef.current, targetLetter, settingsRef.current.selectedCategories);
-    const newTotal = myTotalScoreRef.current + roundScore;
+    playSound("click");
     
-    setMyRoundScore(roundScore);
-    setMyTotalScore(newTotal);
-    
+    const initialValidations: Record<string, boolean> = {};
+    settingsRef.current.selectedCategories.forEach(cat => {
+        const val = (answersRef.current[cat] || "").trim().toLocaleUpperCase('tr-TR');
+        initialValidations[cat] = val.length > 1 && val.startsWith(targetLetter);
+    });
+
     if (playMode === "multi") {
       setPhase("waitingRound");
       const playerField = currentUser === "Emircan" ? "p1_state" : "p2_state";
@@ -330,30 +372,52 @@ export default function IsimSehirPage() {
         joined: true, 
         ready: true, 
         roundFinished: true, 
-        currentScore: roundScore,
-        totalScore: newTotal,
-        answers: answersRef.current
+        answers: answersRef.current,
+        validations: initialValidations,
+        totalScore: myTotalScoreRef.current
       };
 
       try {
         const { data: latestData } = await supabase.from('multiplayer_state').select('*').eq('id', 1).single();
         const opponentField = currentUser === "Emircan" ? "p2_state" : "p1_state";
         
-        if (latestData && latestData[opponentField]?.roundFinished) {
-           await supabase.from('multiplayer_state').update({ [playerField]: myNewState }).eq('id', 1);
-        } else {
-           await supabase.from('multiplayer_state').update({ [playerField]: myNewState }).eq('id', 1);
-        }
+        await supabase.from('multiplayer_state').update({ [playerField]: myNewState }).eq('id', 1);
       } catch (error) {
         console.error(error);
       }
     } else {
+      setMyValidations(initialValidations);
       setPhase("roundResult");
     }
   };
 
+  // YENİ: KABUL / İPTAL TIKLAMA FONKSİYONU
+  const toggleValidation = async (isMine: boolean, catId: string) => {
+    playSound("click");
+    if (playMode === "single") {
+        setMyValidations(prev => ({ ...prev, [catId]: !prev[catId] }));
+        return;
+    }
+
+    // Hangi oyuncunun onay kutusuna tıklandıysa o alanı bul ve Supabase'de güncelle
+    const playerField = isMine ? (currentUser === "Emircan" ? "p1_state" : "p2_state") : (currentUser === "Emircan" ? "p2_state" : "p1_state");
+    
+    const { data } = await supabase.from('multiplayer_state').select('*').eq('id', 1).single();
+    if (data && data[playerField]) {
+        const currentValidations = data[playerField].validations || {};
+        await supabase.from('multiplayer_state').update({
+            [playerField]: {
+                ...data[playerField],
+                validations: { ...currentValidations, [catId]: !currentValidations[catId] }
+            }
+        }).eq('id', 1);
+    }
+  };
+
+  // HAKEMLİK BİTİNCE DİĞER TURA GEÇİŞ
   const handleNext = async () => {
     playSound("click");
+
     if (currentRoundRef.current < settingsRef.current.rounds) {
       if (playMode === "multi") {
          const { data: latestData } = await supabase.from('multiplayer_state').select('*').eq('id', 1).single();
@@ -362,44 +426,36 @@ export default function IsimSehirPage() {
             const newUsed = [...latestData.shared_data.settings.usedLetters, nextLetter];
             
             await supabase.from('multiplayer_state').update({
+               status: 'countdown', // Otomatik Puanlama toplanıp Sayaca girer
                shared_data: { ...latestData.shared_data, settings: { ...latestData.shared_data.settings, usedLetters: newUsed }, targetLetter: nextLetter, round: currentRoundRef.current + 1 },
                p1_state: { ...latestData.p1_state, roundFinished: false },
                p2_state: { ...latestData.p2_state, roundFinished: false }
             }).eq('id', 1);
          }
       } else if (playMode === "single") {
+         // Tek Oyunculu Skor Kaydetme
+         const rScore = CATEGORIES.filter(c => settingsRef.current.selectedCategories.includes(c.id) && myValidations[c]).length * 10;
+         setMyTotalScore(prev => prev + rScore);
+
          const nextLetter = getRandomLetter(settingsRef.current.selectedLetters, settingsRef.current.usedLetters);
          setSettings(prev => ({ ...prev, usedLetters: [...prev.usedLetters, nextLetter] }));
          setCurrentRound(prev => prev + 1);
          setTargetLetter(nextLetter);
          setAnswers({});
-         setTimeLeft(settingsRef.current.timeLimit);
-         setPhase("playing");
+         setCountdownTime(3);
+         setPhase("countdown");
       }
     } else {
       if (playMode === "multi") {
          await supabase.from('multiplayer_state').update({ status: 'game_over' }).eq('id', 1);
       } else if (playMode === "single") {
+         const rScore = CATEGORIES.filter(c => settingsRef.current.selectedCategories.includes(c.id) && myValidations[c]).length * 10;
+         setMyTotalScore(prev => prev + rScore);
          playSound("over");
          setPhase("finalResult");
       }
     }
   };
-
-  useEffect(() => {
-    let timer: NodeJS.Timeout;
-    if (phase === "playing" && settings.timerMode === "timed") {
-      if (timeLeft > 0) {
-        timer = setTimeout(() => {
-          setTimeLeft(t => t - 1);
-          if (timeLeft <= 10) playSound("tick");
-        }, 1000);
-      } else {
-        finishRound();
-      }
-    }
-    return () => clearTimeout(timer);
-  }, [phase, timeLeft, settings.timerMode]);
 
   const toggleCategory = (catId: string) => {
     if (currentUser !== "Emircan" && playMode === "multi") return; 
@@ -523,7 +579,7 @@ export default function IsimSehirPage() {
                 <h3 className="display-font text-2xl text-primary mb-2">Kurallar Belirleniyor</h3>
                 <p className="text-text/60 text-xs font-bold tracking-widest uppercase">Emircan ayarları seçiyor...</p>
               </div>
-              <button onClick={toggleReady} className={`w-full py-5 rounded-[24px] font-black text-xl tracking-widest uppercase shadow-2xl transition-all duration-300 ${isMeReady ? 'bg-green-500 text-white border-4 border-green-400/50' : 'bg-card border-4 border-primary text-primary'}`}>
+              <button onClick={toggleReady} className={`w-full py-5 rounded-[24px] font-black text-xl tracking-widest uppercase shadow-2xl transition-all duration-300 ${isMeReady ? 'bg-green-500 text-white border-4 border-green-400/50' : 'bg-card border-4 border-primary text-primary hover:bg-primary hover:text-background'}`}>
                 {isMeReady ? "👍 HAZIRSIN" : "HAZIRIM"}
               </button>
             </div>
@@ -608,6 +664,16 @@ export default function IsimSehirPage() {
         </div>
       )}
 
+      {/* YENİ: 3... 2... 1... GERİ SAYIM EKRANI */}
+      {phase === "countdown" && (
+        <div className="flex-1 flex flex-col items-center justify-center animate-in zoom-in duration-300 w-full z-10">
+          <h2 className="display-font text-5xl text-primary mb-4 text-center">Hazır Ol!</h2>
+          <div className="text-9xl font-black text-primary drop-shadow-2xl animate-pulse">
+             {countdownTime > 0 ? countdownTime : "BAŞLA!"}
+          </div>
+        </div>
+      )}
+
       {phase === "playing" && (
         <div className="flex-1 flex flex-col items-center animate-in zoom-in duration-300 w-full max-w-md mx-auto z-10">
           
@@ -655,32 +721,33 @@ export default function IsimSehirPage() {
           <div className="text-6xl mb-6 animate-spin drop-shadow-xl">⏳</div>
           <h2 className="display-font text-3xl text-primary mb-2 text-center">Cevaplar Kaydedildi!</h2>
           <p className="text-text/70 uppercase tracking-widest text-sm font-bold animate-pulse text-center">
-             {playMode === "multi" ? `${targetOpponent}'un bitirmesi bekleniyor...` : "Sonuçlara geçiliyor..."}
+             {playMode === "multi" ? `${targetOpponent}'un bitirmesi bekleniyor...` : "Hakem masasına geçiliyor..."}
           </p>
         </div>
       )}
 
+      {/* YENİ: HAKEM MASASI (Kabul/İptal Tikleme Ekranı) */}
       {phase === "roundResult" && (
         <div className="flex-1 flex flex-col items-center animate-in slide-in-from-bottom-5 w-full max-w-md mx-auto z-10 pb-10 overflow-y-auto custom-scrollbar">
           <div className="text-xs uppercase tracking-widest text-primary font-bold mb-2 border border-primary/20 px-4 py-1 rounded-full bg-card shadow-sm mt-2">
-            Tur {currentRound} Sonuçları
+            Tur {currentRound} Hakem Masası
           </div>
           
-          <div className="flex items-center gap-4 mb-6">
+          <p className="text-text/60 text-[10px] text-center mb-4 uppercase tracking-widest px-4">
+             Karar sizin! Kurallara uymayan cevapların yanındaki tike basarak iptal edebilirsiniz.
+          </p>
+
+          <div className="flex items-center gap-4 mb-4">
              <span className="text-6xl font-black text-primary drop-shadow-lg">{targetLetter}</span>
-             <div className="flex flex-col">
-                <span className="text-xs uppercase tracking-widest text-text/50 font-bold">Kazanılan Puan</span>
-                <span className="text-3xl font-black text-green-500">+{myRoundScore}</span>
-             </div>
           </div>
 
-          <div className="w-full flex flex-col gap-3 mb-8">
+          <div className="w-full flex flex-col gap-3 mb-8 px-2">
             {CATEGORIES.filter(c => settings.selectedCategories.includes(c.id)).map(cat => {
-              const myWord = (answers[cat.id] || "").trim().toLocaleUpperCase('tr-TR');
-              const myCorrect = myWord.length > 1 && myWord.startsWith(targetLetter);
+              const myWord = (answers[cat.id] || "").trim();
+              const myValid = !!myValidations[cat.id];
               
-              const opWord = playMode === "multi" ? (opponentAnswers[cat.id] || "").trim().toLocaleUpperCase('tr-TR') : "";
-              const opCorrect = opWord.length > 1 && opWord.startsWith(targetLetter);
+              const opWord = playMode === "multi" ? (opponentAnswers[cat.id] || "").trim() : "";
+              const opValid = !!opponentValidations[cat.id];
 
               return (
                 <div key={cat.id} className="bg-card border border-primary/20 rounded-2xl overflow-hidden shadow-md flex flex-col">
@@ -688,16 +755,35 @@ export default function IsimSehirPage() {
                      <span className="text-[10px] uppercase tracking-widest text-primary font-bold">{cat.label}</span>
                   </div>
                   <div className="flex divide-x divide-primary/10">
-                     <div className={`flex-1 p-3 flex flex-col items-center justify-center text-center ${myCorrect ? 'bg-green-500/5' : 'bg-red-500/5'}`}>
+                     
+                     {/* BENİM CEVABIM VE HAKEM TIKLAMASI */}
+                     <div className={`flex-1 p-3 flex flex-col items-center justify-center text-center relative transition-colors ${myValid ? 'bg-green-500/5' : 'bg-red-500/5'}`}>
                         <span className="text-[8px] uppercase tracking-widest text-text/40 mb-1 font-bold">Sen</span>
-                        <span className={`font-bold text-sm ${myCorrect ? 'text-green-400' : 'text-red-400 line-through'}`}>{myWord || "-"}</span>
+                        <span className={`font-bold text-sm ${myValid ? 'text-green-400' : 'text-red-400 line-through'}`}>{myWord || "-"}</span>
+                        
+                        <button 
+                          onClick={() => toggleValidation(true, cat.id)}
+                          className={`absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 flex items-center justify-center rounded-full border shadow-sm transition-transform active:scale-90 ${myValid ? 'bg-green-500/20 border-green-500 text-green-500' : 'bg-red-500/20 border-red-500 text-red-500'}`}
+                        >
+                           {myValid ? "✅" : "❌"}
+                        </button>
                      </div>
+
+                     {/* RAKİBİN CEVABI VE HAKEM TIKLAMASI */}
                      {playMode === "multi" && (
-                        <div className={`flex-1 p-3 flex flex-col items-center justify-center text-center ${opCorrect ? 'bg-green-500/5' : 'bg-red-500/5'}`}>
+                        <div className={`flex-1 p-3 flex flex-col items-center justify-center text-center relative transition-colors ${opValid ? 'bg-green-500/5' : 'bg-red-500/5'}`}>
                            <span className="text-[8px] uppercase tracking-widest text-text/40 mb-1 font-bold">{targetOpponent}</span>
-                           <span className={`font-bold text-sm ${opCorrect ? 'text-green-400' : 'text-red-400 line-through'}`}>{opWord || "-"}</span>
+                           <span className={`font-bold text-sm ${opValid ? 'text-green-400' : 'text-red-400 line-through'}`}>{opWord || "-"}</span>
+                           
+                           <button 
+                             onClick={() => toggleValidation(false, cat.id)}
+                             className={`absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 flex items-center justify-center rounded-full border shadow-sm transition-transform active:scale-90 ${opValid ? 'bg-green-500/20 border-green-500 text-green-500' : 'bg-red-500/20 border-red-500 text-red-500'}`}
+                           >
+                              {opValid ? "✅" : "❌"}
+                           </button>
                         </div>
                      )}
+
                   </div>
                 </div>
               );
@@ -705,7 +791,7 @@ export default function IsimSehirPage() {
           </div>
 
           <button onClick={handleNext} className="w-full mt-auto bg-primary text-background p-4 rounded-2xl shadow-xl hover:scale-[1.02] transition-transform font-bold text-lg sticky bottom-0">
-            {currentRound < settings.rounds ? "Sıradaki Tura Geç ➡️" : "Sonuçları Gör 🏆"}
+            {currentRound < settings.rounds ? "Puanları Onayla & Tura Geç ➡️" : "Sonuçları Gör 🏆"}
           </button>
         </div>
       )}
