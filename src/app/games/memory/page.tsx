@@ -118,7 +118,6 @@ export default function MemoryGamePage() {
       if (opState?.currentScore) setOpponentCurrentScore(opState.currentScore);
       if (opState?.finalScore) setOpponentFinalScore(opState.finalScore);
 
-      // YENİ: Emircan odayı beklemeye aldığında Efsun'u da otomatik lobiye çek
       if (data.status === 'waiting' && (phase === 'finalResult' || phase === 'waitingRound')) {
          setPhase('settings');
          setMyFinalScore(null);
@@ -160,8 +159,8 @@ export default function MemoryGamePage() {
         }
       }
 
-      // YENİ: Bug'ın çözümü! Sadece oyun bitişi beklenirken final ekranına geç.
-      if (data.status === 'game_over' && phase === 'waitingRound') {
+      // YENİ: Takılma bug'ı çözüldü. Artık direkt Final ekranına geçiriyor.
+      if (data.status === 'game_over' && phase !== 'finalResult') {
         setPhase('finalResult');
         playSound("over");
       }
@@ -302,12 +301,13 @@ export default function MemoryGamePage() {
   const handleNext = async () => {
     playSound("click");
     if (currentRound < settings.rounds) {
-      if (playMode === "multi" && currentUser === "Emircan") {
+      if (playMode === "multi") {
+         // YENİ: Artık Efsun da bu butona basıp diğer tura geçirebilir!
          const nextTarget = generateRandomColor();
          await supabase.from('multiplayer_state').update({
             shared_data: { settings, targetColor: nextTarget, round: currentRound + 1 },
-            p1_state: { joined: true, ready: true, roundFinished: false, currentScore: "0" },
-            p2_state: { joined: true, ready: true, roundFinished: false, currentScore: "0" }
+            p1_state: { joined: true, ready: true, roundFinished: false, currentScore: "0", finalScore: null },
+            p2_state: { joined: true, ready: true, roundFinished: false, currentScore: "0", finalScore: null }
          }).eq('id', 1);
       } else if (playMode === "single") {
          setCurrentRound(prev => prev + 1);
@@ -317,7 +317,8 @@ export default function MemoryGamePage() {
          setPhase("memorize");
       }
     } else {
-      if (playMode === "multi" && currentUser === "Emircan") {
+      if (playMode === "multi") {
+         // YENİ: Artık Efsun da maç sonu butonuna basabilir!
          await supabase.from('multiplayer_state').update({ status: 'game_over' }).eq('id', 1);
       } else if (playMode === "single") {
          const total = scores.reduce((sum, val) => sum + val, 0);
@@ -588,21 +589,21 @@ export default function MemoryGamePage() {
 
           {phase === "playing" && (
             <>
-              {/* YENİ: Ses geri eklendi! */}
-              <div className="absolute top-0 left-0 h-full flex w-32 bg-black/20 backdrop-blur-[4px] border-r border-white/10">
-                <div className="flex-1 h-full relative overflow-hidden">
+              {/* YENİ: Mobilde ekranın kaymasını engelleyen touch-none eklendi, efsane ses de geri döndü! */}
+              <div className="absolute top-0 left-0 h-full flex w-32 bg-black/20 backdrop-blur-[4px] border-r border-white/10 touch-none">
+                <div className="flex-1 h-full relative overflow-hidden touch-none">
                   <input type="range" min="0" max="360" value={userColor.h} 
                     onChange={(e) => { setUserColor({...userColor, h: parseInt(e.target.value)}); playSound("memory_dial"); }}
                     className="dialed-slider absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 -rotate-90 w-[500px] h-full"
                     style={{ background: `linear-gradient(to right, #ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff, #ff0000)` }} />
                 </div>
-                <div className="flex-1 h-full relative overflow-hidden">
+                <div className="flex-1 h-full relative overflow-hidden touch-none">
                   <input type="range" min="0" max="100" value={userColor.s} 
                     onChange={(e) => { setUserColor({...userColor, s: parseInt(e.target.value)}); playSound("memory_dial"); }}
                     className="dialed-slider absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 -rotate-90 w-[500px] h-full"
                     style={{ background: `linear-gradient(to right, hsl(${userColor.h}, 0%, ${userColor.l}%), hsl(${userColor.h}, 100%, ${userColor.l}%))` }} />
                 </div>
-                <div className="flex-1 h-full relative overflow-hidden">
+                <div className="flex-1 h-full relative overflow-hidden touch-none">
                   <input type="range" min="0" max="100" value={userColor.l} 
                     onChange={(e) => { setUserColor({...userColor, l: parseInt(e.target.value)}); playSound("memory_dial"); }}
                     className="dialed-slider absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 -rotate-90 w-[500px] h-full"
@@ -655,15 +656,10 @@ export default function MemoryGamePage() {
             </div>
           </div>
 
-          {playMode === "single" || currentUser === "Emircan" ? (
-            <button onClick={handleNext} className="w-full max-w-xs bg-primary text-background p-4 rounded-2xl shadow-xl hover:scale-[1.02] transition-transform font-bold text-lg">
-              {currentRound < settings.rounds ? "Sonraki Tur ➡️" : "Sonuçları Gör 🏆"}
-            </button>
-          ) : (
-            <div className="w-full max-w-xs p-4 rounded-2xl border border-primary/20 bg-card text-center text-xs font-bold uppercase tracking-widest text-primary/70 animate-pulse">
-              Emircan'ın Sonraki Tura Geçmesi Bekleniyor...
-            </div>
-          )}
+          {/* YENİ: Artık iki oyuncu da bu butonu görüp basabiliyor! Kim basarsa oyun devam eder. */}
+          <button onClick={handleNext} className="w-full max-w-xs bg-primary text-background p-4 rounded-2xl shadow-xl hover:scale-[1.02] transition-transform font-bold text-lg">
+            {currentRound < settings.rounds ? "Sıradaki Tura Geç ➡️" : "Sonuçları Gör 🏆"}
+          </button>
         </div>
       )}
 
