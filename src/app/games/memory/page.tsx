@@ -47,7 +47,6 @@ export default function MemoryGamePage() {
   const [currentScore, setCurrentScore] = useState("0");
   const [opponentCurrentScore, setOpponentCurrentScore] = useState("0");
   
-  // YENİ: Maç sonu hesaplamaları için stateler
   const [myFinalScore, setMyFinalScore] = useState<string | null>(null);
   const [opponentFinalScore, setOpponentFinalScore] = useState<string | null>(null);
 
@@ -70,7 +69,6 @@ export default function MemoryGamePage() {
     return () => document.body.classList.remove("game-active-ui");
   }, [phase]);
 
-  // YENİ: Lobideki Skor Tablosunu "Kazanma Sayısı" (Win Count) olarak çekme
   const fetchLeaderboard = async () => {
     const { data } = await supabase.from('game_scores').select('*').eq('game_name', 'memory_win');
     if (data) {
@@ -80,17 +78,14 @@ export default function MemoryGamePage() {
     }
   };
 
-  // YENİ: Kimin kazandığını hesaplayıp otomatik kaydetme
   useEffect(() => {
     if (phase === "finalResult" && !isSaved && myFinalScore) {
-      // Önce normal puanı veri tabanına geçmiş olarak kaydet
       supabase.from('game_scores').insert([{
         game_name: 'memory',
         player_name: currentUser,
         score: parseFloat(myFinalScore)
       }]).then(() => setIsSaved(true));
 
-      // Eğer çok oyunculuysa ve KAZANAN BEN İSEM, haneme 1 Galibiyet (win) yaz!
       if (playMode === "multi" && opponentFinalScore !== null && !winSaved) {
         if (parseFloat(myFinalScore) > parseFloat(opponentFinalScore)) {
           supabase.from('game_scores').insert([{
@@ -99,10 +94,9 @@ export default function MemoryGamePage() {
             score: 1
           }]).then(() => {
             setWinSaved(true);
-            fetchLeaderboard(); // Galibiyet sonrası lobi skorunu güncelle
+            fetchLeaderboard();
           });
         } else {
-          // Eğer kaybettiysem veya berabereyse rakibin kazanma yazmasını bekleyip kendi lobimi güncelliyorum
           setTimeout(fetchLeaderboard, 2000);
           setWinSaved(true);
         }
@@ -123,6 +117,17 @@ export default function MemoryGamePage() {
 
       if (opState?.currentScore) setOpponentCurrentScore(opState.currentScore);
       if (opState?.finalScore) setOpponentFinalScore(opState.finalScore);
+
+      // YENİ: Emircan odayı beklemeye aldığında Efsun'u da otomatik lobiye çek
+      if (data.status === 'waiting' && (phase === 'finalResult' || phase === 'waitingRound')) {
+         setPhase('settings');
+         setMyFinalScore(null);
+         setOpponentFinalScore(null);
+         setScores([]);
+         setIsSaved(false);
+         setWinSaved(false);
+         setIsMeReady(false);
+      }
 
       if (data.status === 'playing') {
         if (phase === "settings") {
@@ -155,7 +160,8 @@ export default function MemoryGamePage() {
         }
       }
 
-      if (data.status === 'game_over' && phase !== 'finalResult') {
+      // YENİ: Bug'ın çözümü! Sadece oyun bitişi beklenirken final ekranına geç.
+      if (data.status === 'game_over' && phase === 'waitingRound') {
         setPhase('finalResult');
         playSound("over");
       }
@@ -432,7 +438,6 @@ export default function MemoryGamePage() {
             </p>
           </div>
 
-          {/* YENİ LOBİ SKOR TABLOSU: Yüzde yerine WIN (Galibiyet) sayısını gösterir */}
           <div className="bg-card border border-primary/40 rounded-3xl p-5 shadow-lg flex justify-between items-center bg-gradient-to-br from-background to-primary/5">
             <div className="flex flex-col items-center">
               <span className="text-xs uppercase tracking-widest text-text/50 font-bold">Emircan</span>
@@ -583,27 +588,23 @@ export default function MemoryGamePage() {
 
           {phase === "playing" && (
             <>
-              {/* YENİ: onChange'den playSound çıkarıldı, sadece state güncelleniyor (kasma bitti). */}
-              {/* onPointerUp eklenerek sadece parmak ekrandan çekildiğinde ufak bir tık sesi verildi. */}
+              {/* YENİ: Ses geri eklendi! */}
               <div className="absolute top-0 left-0 h-full flex w-32 bg-black/20 backdrop-blur-[4px] border-r border-white/10">
                 <div className="flex-1 h-full relative overflow-hidden">
                   <input type="range" min="0" max="360" value={userColor.h} 
-                    onChange={(e) => { setUserColor({...userColor, h: parseInt(e.target.value)}); }}
-                    onPointerUp={() => playSound("click")}
+                    onChange={(e) => { setUserColor({...userColor, h: parseInt(e.target.value)}); playSound("memory_dial"); }}
                     className="dialed-slider absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 -rotate-90 w-[500px] h-full"
                     style={{ background: `linear-gradient(to right, #ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff, #ff0000)` }} />
                 </div>
                 <div className="flex-1 h-full relative overflow-hidden">
                   <input type="range" min="0" max="100" value={userColor.s} 
-                    onChange={(e) => { setUserColor({...userColor, s: parseInt(e.target.value)}); }}
-                    onPointerUp={() => playSound("click")}
+                    onChange={(e) => { setUserColor({...userColor, s: parseInt(e.target.value)}); playSound("memory_dial"); }}
                     className="dialed-slider absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 -rotate-90 w-[500px] h-full"
                     style={{ background: `linear-gradient(to right, hsl(${userColor.h}, 0%, ${userColor.l}%), hsl(${userColor.h}, 100%, ${userColor.l}%))` }} />
                 </div>
                 <div className="flex-1 h-full relative overflow-hidden">
                   <input type="range" min="0" max="100" value={userColor.l} 
-                    onChange={(e) => { setUserColor({...userColor, l: parseInt(e.target.value)}); }}
-                    onPointerUp={() => playSound("click")}
+                    onChange={(e) => { setUserColor({...userColor, l: parseInt(e.target.value)}); playSound("memory_dial"); }}
                     className="dialed-slider absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 -rotate-90 w-[500px] h-full"
                     style={{ background: `linear-gradient(to right, #000000, hsl(${userColor.h}, ${userColor.s}%, 50%), #ffffff)` }} />
                 </div>
@@ -666,7 +667,6 @@ export default function MemoryGamePage() {
         </div>
       )}
 
-      {/* YENİ: KAZANAN EKRANI VE ORTALAMALAR */}
       {phase === "finalResult" && (
         <div className="flex-1 flex flex-col items-center justify-center animate-in zoom-in max-w-sm mx-auto w-full">
           <div className="text-7xl mb-4 drop-shadow-lg">👑</div>
@@ -684,7 +684,6 @@ export default function MemoryGamePage() {
             Toplam {settings.rounds} turun genel ortalaması hesaplandı.
           </p>
 
-          {/* İki tarafın da tüm turlardaki ortalamasını yan yana gösterir */}
           {playMode === "multi" && opponentFinalScore !== null ? (
             <div className="flex gap-4 w-full justify-center mb-6">
               <div className={`bg-card border ${parseFloat(myFinalScore || "0") >= parseFloat(opponentFinalScore) ? 'border-green-500 shadow-green-500/20' : 'border-primary/20'} w-1/2 p-4 rounded-3xl shadow-xl flex flex-col items-center relative`}>
