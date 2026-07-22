@@ -129,6 +129,7 @@ export default function IsimSehirPage() {
       const opState = currentUser === "Emircan" ? data.p2_state : data.p1_state;
       const myState = currentUser === "Emircan" ? data.p1_state : data.p2_state;
       const currentPhase = phaseRef.current;
+      const currentSettings = settingsRef.current;
 
       if (opState?.ready) setIsOpponentReady(true);
       else setIsOpponentReady(false);
@@ -152,6 +153,12 @@ export default function IsimSehirPage() {
       }
 
       if (data.status === 'countdown') {
+         if (currentPhase === 'roundResult') {
+             const finalVals = myState?.validations || {};
+             const roundScore = CATEGORIES.filter(c => currentSettings.selectedCategories.includes(c.id) && finalVals[c.id]).length * 10;
+             setMyTotalScore(prev => prev + roundScore);
+         }
+         
          if (currentPhase !== 'countdown') {
             setSettings(data.shared_data.settings);
             setCurrentRound(data.shared_data.round);
@@ -175,6 +182,11 @@ export default function IsimSehirPage() {
       }
 
       if (data.status === 'game_over') {
+        if (currentPhase === 'roundResult') {
+            const finalVals = myState?.validations || {};
+            const roundScore = CATEGORIES.filter(c => currentSettings.selectedCategories.includes(c.id) && finalVals[c.id]).length * 10;
+            setMyTotalScore(prev => prev + roundScore);
+        }
         if (currentPhase !== 'finalResult') {
             setPhase('finalResult');
             playSound("over");
@@ -391,7 +403,7 @@ export default function IsimSehirPage() {
     playSound("click");
 
     const finalVals = myValidations;
-    const roundScore = CATEGORIES.filter(c => settingsRef.current.selectedCategories.includes(c.id) && finalVals[c]).length * 10;
+    const roundScore = CATEGORIES.filter(c => settingsRef.current.selectedCategories.includes(c.id) && finalVals[c.id]).length * 10;
     const newTotal = myTotalScoreRef.current + roundScore;
     
     setMyTotalScore(newTotal);
@@ -403,7 +415,7 @@ export default function IsimSehirPage() {
        if (latestData) {
           const opField = currentUser === "Emircan" ? "p2_state" : "p1_state";
           const opFinalVals = opponentValidations;
-          const opRoundScore = CATEGORIES.filter(c => settingsRef.current.selectedCategories.includes(c.id) && opFinalVals[c]).length * 10;
+          const opRoundScore = CATEGORIES.filter(c => settingsRef.current.selectedCategories.includes(c.id) && opFinalVals[c.id]).length * 10;
           const opNewTotal = (latestData[opField]?.totalScore || 0) + opRoundScore;
 
           if (currentRoundRef.current < settingsRef.current.rounds) {
@@ -708,7 +720,6 @@ export default function IsimSehirPage() {
         </div>
       )}
 
-      {/* MUHTEŞEM HAKEM MASASI (Eksiksiz ve net butonlar eklendi!) */}
       {phase === "roundResult" && (
         <div className="flex-1 flex flex-col items-center animate-in slide-in-from-bottom-5 w-full max-w-md mx-auto z-10 pb-10 overflow-y-auto custom-scrollbar">
           <div className="text-xs uppercase tracking-widest text-primary font-bold mb-2 border border-primary/20 px-4 py-1 rounded-full bg-card shadow-sm mt-2">
@@ -739,7 +750,6 @@ export default function IsimSehirPage() {
                    
                    <div className="flex justify-between items-center gap-3">
                        
-                       {/* SENİN KELİMEN VE BUTONUN */}
                        <div className={`flex items-center gap-3 flex-1 bg-background p-2 rounded-xl border transition-colors duration-300 ${myValid ? 'border-green-500/30 shadow-[inset_0_0_10px_rgba(34,197,94,0.1)]' : 'border-red-500/30 opacity-60'}`}>
                            <button 
                              onClick={() => toggleValidation(true, cat.id)} 
@@ -753,7 +763,6 @@ export default function IsimSehirPage() {
                            </div>
                        </div>
 
-                       {/* RAKİBİN KELİMESİ VE BUTONU */}
                        {playMode === "multi" && (
                        <div className={`flex items-center gap-3 flex-1 bg-background p-2 rounded-xl border flex-row-reverse text-right transition-colors duration-300 ${opValid ? 'border-green-500/30 shadow-[inset_0_0_10px_rgba(34,197,94,0.1)]' : 'border-red-500/30 opacity-60'}`}>
                            <button 
