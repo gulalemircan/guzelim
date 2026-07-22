@@ -27,7 +27,12 @@ export default function MemoryGamePage() {
     timeLimit: 10
   });
 
-  const [phase, setPhase] = useState<"settings" | "memorize" | "playing" | "roundResult" | "finalResult">("settings");
+  // YENİ: modeSelect aşaması eklendi ve başlangıç ekranı yapıldı
+  const [phase, setPhase] = useState<"modeSelect" | "settings" | "memorize" | "playing" | "roundResult" | "finalResult">("modeSelect");
+  
+  // YENİ: Hangi modun seçildiğini tutacak state (İleride çok oyunculu altyapısını buraya bağlayacağız)
+  const [playMode, setPlayMode] = useState<"single" | "multi" | null>(null);
+
   const [currentRound, setCurrentRound] = useState(1);
   const [scores, setScores] = useState<number[]>([]);
   
@@ -42,13 +47,11 @@ export default function MemoryGamePage() {
   const [selectedPlayer, setSelectedPlayer] = useState<"Emircan" | "Efsun" | null>(null);
   const [isSaved, setIsSaved] = useState(false);
 
-  // --- EKLENEN KISIM BURASI (Ortalama Puan Hesaplama) ---
   const getAverageScore = () => {
     if (scores.length === 0) return "0";
     const total = scores.reduce((sum, currentScore) => sum + currentScore, 0);
     return (total / scores.length).toFixed(1);
   };
-  // --------------------------------------------------------
 
   useEffect(() => {
     fetchLeaderboard();
@@ -158,12 +161,47 @@ export default function MemoryGamePage() {
         </Link>
       </div>
 
+      {/* YENİ: OYUN MODU SEÇİM EKRANI */}
+      {phase === "modeSelect" && (
+        <div className="flex-1 flex flex-col items-center justify-center gap-8 animate-in slide-in-from-bottom-5 max-w-md mx-auto w-full">
+          <div className="text-center mb-2">
+            <div className="text-6xl mb-4 drop-shadow-lg">🎮</div>
+            <h2 className="display-font text-4xl text-primary font-black">Renk Hafızası</h2>
+            <p className="text-text/70 text-sm mt-2 font-medium tracking-wide">Nasıl oynamak istersin?</p>
+          </div>
+
+          <div className="w-full flex flex-col gap-4 px-2">
+            <button 
+              onClick={() => { setPlayMode("single"); setPhase("settings"); playSound("click"); }}
+              className="w-full bg-card border-2 border-primary/20 hover:border-primary text-primary p-6 rounded-[32px] shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all flex flex-col items-center gap-3 group"
+            >
+              <span className="text-4xl group-hover:scale-110 transition-transform duration-300">👤</span>
+              <span className="font-black tracking-widest uppercase text-lg">Tek Oyunculu</span>
+              <span className="text-text/50 text-xs font-bold uppercase tracking-wider">Kendi Rekorunu Kır</span>
+            </button>
+
+            <button 
+              onClick={() => { setPlayMode("multi"); setPhase("settings"); playSound("click"); }}
+              className="w-full bg-primary text-background p-6 rounded-[32px] shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all flex flex-col items-center gap-3 group border-2 border-transparent"
+            >
+              <span className="text-4xl group-hover:scale-110 transition-transform duration-300">👥</span>
+              <span className="font-black tracking-widest uppercase text-lg">Çok Oyunculu</span>
+              <span className="bg-background/20 text-background px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest mt-1">
+                Aynı Anda Kapış (Hazırlanıyor)
+              </span>
+            </button>
+          </div>
+        </div>
+      )}
+
       {phase === "settings" && (
-        <div className="flex-1 flex flex-col gap-6 animate-in slide-in-from-bottom-5 max-w-md mx-auto w-full">
+        <div className="flex-1 flex flex-col gap-6 animate-in slide-in-from-right-5 max-w-md mx-auto w-full">
           <div className="text-center mb-2">
             <div className="text-5xl mb-2">⚙️</div>
             <h2 className="display-font text-3xl text-primary">Oda Ayarları</h2>
-            <p className="text-text/70 text-sm">Kuralları belirle ve maça başla.</p>
+            <p className="text-text/70 text-sm font-medium">
+              Mod: <span className="text-primary font-bold">{playMode === "single" ? "Tek Oyunculu" : "Çok Oyunculu"}</span>
+            </p>
           </div>
 
           <div className="bg-card border border-primary/40 rounded-3xl p-5 shadow-lg flex justify-between items-center bg-gradient-to-br from-background to-primary/5">
@@ -360,7 +398,8 @@ export default function MemoryGamePage() {
           )}
 
           <div className="flex flex-col gap-3 w-full">
-            <button onClick={() => { setPhase("settings"); playSound("click"); }} className="w-full bg-card border border-primary/20 text-primary p-4 rounded-2xl shadow-sm hover:border-primary/50 transition-all font-bold text-lg">
+            {/* YENİ: Yeniden Oyna Butonu artık doğrudan mod seçim ekranına (modeSelect) gönderiyor */}
+            <button onClick={() => { setPhase("modeSelect"); playSound("click"); }} className="w-full bg-card border border-primary/20 text-primary p-4 rounded-2xl shadow-sm hover:border-primary/50 transition-all font-bold text-lg">
               🔄 Yeniden Oyna
             </button>
             
