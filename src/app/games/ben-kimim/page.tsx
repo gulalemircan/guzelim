@@ -48,6 +48,8 @@ export default function BenKimimPage() {
   const currentRoundRef = useRef(currentRound);
   const settingsRef = useRef(settings);
   const guesserRef = useRef(guesser);
+  // YENİ: TypeScript hatasını çözen React kalıcı belleği
+  const lastSignalIdRef = useRef(0);
 
   useEffect(() => { phaseRef.current = phase; }, [phase]);
   useEffect(() => { currentRoundRef.current = currentRound; }, [currentRound]);
@@ -77,7 +79,6 @@ export default function BenKimimPage() {
       const opState = currentUser === "Emircan" ? data.p2_state : data.p1_state;
       const myState = currentUser === "Emircan" ? data.p1_state : data.p2_state;
       const currentPhase = phaseRef.current;
-      const round = currentRoundRef.current;
 
       if (opState?.ready) setIsOpponentReady(true);
       else setIsOpponentReady(false);
@@ -115,10 +116,10 @@ export default function BenKimimPage() {
           }
       }
 
-      // CANLI SİNYAL DİNLEYİCİ (Kör Ekran İçin)
+      // CANLI SİNYAL DİNLEYİCİ (Kör Ekran İçin - TYPESCRIPT HATASI ÇÖZÜLDÜ)
       if (data.status === 'playing' && currentPhase === 'playing') {
-          if (data.shared_data.signalId && data.shared_data.signalId !== window.lastSignalId) {
-             window.lastSignalId = data.shared_data.signalId;
+          if (data.shared_data.signalId && data.shared_data.signalId !== lastSignalIdRef.current) {
+             lastSignalIdRef.current = data.shared_data.signalId;
              const sig = data.shared_data.signal;
              setSignalFlash(sig);
              
@@ -171,8 +172,6 @@ export default function BenKimimPage() {
       if (timeLeft > 0) {
         timer = setTimeout(() => {
           setTimeLeft(t => t - 1);
-          // Her 5 saniyede bir süreyi veritabanına atıp diğer ekranı senkronize edebiliriz
-          // Ama çok yormamak için süreyi sadece yerel tutacağız, bitince bitir sinyali atacağız.
         }, 1000);
       } else {
         // Süre Bitti! (Bilemedi)
@@ -254,9 +253,6 @@ export default function BenKimimPage() {
 
   // TUR BİTİRME (Bildiyse veya Süre Bittiyse)
   const triggerRoundEnd = async (result: "bildi" | "bilemedi") => {
-      const playerField = currentUser === "Emircan" ? "p1_state" : "p2_state";
-      const opField = currentUser === "Emircan" ? "p2_state" : "p1_state";
-      
       const { data } = await supabase.from('multiplayer_state').select('*').eq('id', 1).single();
       
       if (data) {
