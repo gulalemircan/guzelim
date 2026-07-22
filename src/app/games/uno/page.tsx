@@ -59,7 +59,12 @@ export default function UnoPage() {
   const [pendingAction, setPendingAction] = useState<"none" | "choosing_color">("none");
   const [myUnoSaid, setMyUnoSaid] = useState(false);
   const [opponentUnoSaid, setOpponentUnoSaid] = useState(false);
+  const [winner, setWinner] = useState<string | null>(null);
+  
+  // Transient Events (Emoji & Uno Bildirimi)
   const [reaction, setReaction] = useState<string | null>(null);
+  const [unoNotification, setUnoNotification] = useState<string | null>(null);
+  const lastEventIdRef = useRef(0);
 
   const [leaderboard, setLeaderboard] = useState({ emircan: 0, efsun: 0 });
   const [isSaved, setIsSaved] = useState(false);
@@ -93,6 +98,7 @@ export default function UnoPage() {
          setPhase('settings');
          setIsMeReady(false);
          setIsSaved(false);
+         setWinner(null);
       }
 
       if (data.status === 'playing') {
@@ -111,16 +117,30 @@ export default function UnoPage() {
           setCurrentColor(data.shared_data?.currentColor || "red");
           setPendingAction(data.shared_data?.pendingAction || "none");
 
-          if (data.shared_data?.reaction) {
-              setReaction(data.shared_data.reaction);
-              playSound("tick");
-              setTimeout(() => setReaction(null), 2000);
+          // YENİ: Akıllı Olay Sistemi (Emoji ve UNO Bildirimi Bug'ını Çözer)
+          if (data.shared_data?.lastEvent && data.shared_data.lastEvent.id !== lastEventIdRef.current) {
+              lastEventIdRef.current = data.shared_data.lastEvent.id;
+              const evt = data.shared_data.lastEvent;
+              
+              if (evt.type === 'reaction') {
+                  setReaction(evt.payload);
+                  playSound("tick");
+                  setTimeout(() => setReaction(null), 2000);
+              } else if (evt.type === 'uno') {
+                  setUnoNotification(`${evt.payload} UNO DEDİ!`);
+                  playSound("success");
+                  setTimeout(() => setUnoNotification(null), 3000);
+              }
           }
       }
 
-      if (data.status === 'game_over' && phase !== 'finalResult') {
-          setPhase('finalResult');
-          playSound("over");
+      // YENİ: Kazanma/Kaybetme Bug'ı Çözümü
+      if (data.status === 'game_over') {
+          setWinner(data.shared_data?.winner || null);
+          if (phase !== 'finalResult') {
+              setPhase('finalResult');
+              playSound("over");
+          }
       }
     };
 
@@ -165,7 +185,6 @@ export default function UnoPage() {
     playSound("click");
     let deck = generateDeck();
     
-    // İlk kart sayı olana kadar çek (Joker veya Action ile başlamasın)
     let firstCard = deck.pop()!;
     while (['skip', 'reverse', 'draw2', 'wild', 'draw4'].includes(firstCard.value)) {
         deck.unshift(firstCard);
@@ -180,24 +199,23 @@ export default function UnoPage() {
       shared_data: { 
           drawPile: deck, 
           discardPile: [firstCard], 
-          currentTurn: "Efsun", // Bayanlar önden :) 
+          currentTurn: "Efsun",
           currentColor: firstCard.color,
           pendingAction: "none",
-          reaction: null
+          lastEvent: null, // Reset events
+          winner: null
       },
       p1_state: { joined: true, ready: true, hand: p1Hand, unoSaid: false },
       p2_state: { joined: true, ready: true, hand: p2Hand, unoSaid: false }
     }).eq('id', 1);
   };
 
-  // --- KART OYNAMA MOTORU (2 KİŞİLİK ÖZEL KURALLAR DAHİL) ---
   const handlePlayCard = async (cardIndex: number) => {
       if (currentTurn !== currentUser || pendingAction !== "none") return;
 
       const cardToPlay = myHand[cardIndex];
       const topCard = discardPile[discardPile.length - 1];
 
-      // Kural Kontrolü: Rengi aynı, Sayısı/Türü aynı veya Siyah Kart (Wild)
       const isValid = cardToPlay.color === 'wild' || 
                       cardToPlay.color === currentColor || 
                       cardToPlay.value === topCard.value;
@@ -220,44 +238,43 @@ export default function UnoPage() {
       let drawPile = [...data.shared_data.drawPile];
       let opHand = [...data[opPlayerField].hand];
 
-      // UNO Kazanma Durumu
+      // KAZANMA DURUMU KONTROLÜ VE DB GÜNCELLEMESİ
       if (newHand.length === 0) {
           await supabase.from('multiplayer_state').update({
               status: 'game_over',
+              shared_data: { ...data.shared_data, winner: currentUser },
               [myPlayerField]: { ...data[myPlayerField], hand: newHand }
           }).eq('id', 1);
           return;
       }
 
-      // AKSİYON KARTLARI ÇÖZÜMLEMESİ (2 Kişilik Özel UNO)
       if (cardToPlay.value === 'skip' || cardToPlay.value === 'reverse') {
-          // 2 Kişilikte Reverse ve Skip atan kişinin tekrar oynamasını sağlar!
           nextTurn = currentUser; 
       } 
       else if (cardToPlay.value === 'draw2') {
-          // Rakip 2 kart çeker ve sıra SENDE kalır!
-          if (drawPile.length < 2) return; // Desteyi karıştırma şimdilik atlandı (Uzamasın)
-          opHand.push(drawPile.pop()!);
-          opHand.push(drawPile.pop()!);
+          if (drawPile.length >= 2) {
+             opHand.push(drawPile.pop()!);
+             opHand.push(drawPile.pop()!);
+          }
           nextTurn = currentUser;
       }
       else if (cardToPlay.value === 'wild') {
           newPendingAction = "choosing_color";
-          nextTurn = currentUser; // Renk seçene kadar sende
+          nextTurn = currentUser; 
       }
       else if (cardToPlay.value === 'draw4') {
-          if (drawPile.length < 4) return;
-          opHand.push(drawPile.pop()!);
-          opHand.push(drawPile.pop()!);
-          opHand.push(drawPile.pop()!);
-          opHand.push(drawPile.pop()!);
+          if (drawPile.length >= 4) {
+             opHand.push(drawPile.pop()!);
+             opHand.push(drawPile.pop()!);
+             opHand.push(drawPile.pop()!);
+             opHand.push(drawPile.pop()!);
+          }
           newPendingAction = "choosing_color";
-          nextTurn = currentUser; // Renk seçene kadar sende (Rakip cezayı yer, sen tekrar oynarsın)
+          nextTurn = currentUser; 
       }
 
-      // Uno durumu sıfırlaması (Eğer kart atarsan ve 1 kartın kalırsa UNO demen lazım)
       let unoState = myUnoSaid;
-      if (newHand.length > 1) unoState = false; // Güvenlik sıfırlaması
+      if (newHand.length > 1) unoState = false; 
 
       await supabase.from('multiplayer_state').update({
           shared_data: { 
@@ -288,7 +305,7 @@ export default function UnoPage() {
           shared_data: { 
               ...data.shared_data, 
               drawPile: drawPile,
-              currentTurn: targetOpponent // Kart çekince sıra geçer
+              currentTurn: targetOpponent 
           },
           [myPlayerField]: { ...data[myPlayerField], hand: newHand, unoSaid: false }
       }).eq('id', 1);
@@ -299,7 +316,6 @@ export default function UnoPage() {
       const { data } = await supabase.from('multiplayer_state').select('*').eq('id', 1).single();
       if (!data) return;
 
-      // Siyah kart atan her zaman tekrar oynar kuralı var (Draw4). Normal Wild ise sıra geçer.
       const topCard = data.shared_data.discardPile[data.shared_data.discardPile.length - 1];
       const nextTurn = topCard.value === 'draw4' ? currentUser : targetOpponent;
 
@@ -314,12 +330,15 @@ export default function UnoPage() {
   };
 
   const sayUno = async () => {
-      if (myHand.length <= 2) {
-          playSound("success");
+      if (myHand.length <= 2 && !myUnoSaid) {
           const { data } = await supabase.from('multiplayer_state').select('*').eq('id', 1).single();
-          await supabase.from('multiplayer_state').update({
-              [myPlayerField]: { ...data[myPlayerField], unoSaid: true }
-          }).eq('id', 1);
+          if (data) {
+             const newEventId = (data.shared_data.lastEvent?.id || 0) + 1;
+             await supabase.from('multiplayer_state').update({
+                 shared_data: { ...data.shared_data, lastEvent: { id: newEventId, type: 'uno', payload: currentUser } },
+                 [myPlayerField]: { ...data[myPlayerField], unoSaid: true }
+             }).eq('id', 1);
+          }
       }
   };
 
@@ -347,14 +366,15 @@ export default function UnoPage() {
   const sendReaction = async (emoji: string) => {
       const { data } = await supabase.from('multiplayer_state').select('*').eq('id', 1).single();
       if (data) {
+          const newEventId = (data.shared_data.lastEvent?.id || 0) + 1;
           await supabase.from('multiplayer_state').update({
-              shared_data: { ...data.shared_data, reaction: emoji }
+              shared_data: { ...data.shared_data, lastEvent: { id: newEventId, type: 'reaction', payload: emoji } }
           }).eq('id', 1);
       }
   };
 
   const saveScoreToDatabase = async () => {
-    if (isSaved || myHand.length !== 0) return; // Sadece kazanan kaydeder
+    if (isSaved || winner !== currentUser) return; 
     playSound("success");
     await supabase.from('game_scores').insert([{
       game_name: 'uno_win',
@@ -364,9 +384,8 @@ export default function UnoPage() {
     setIsSaved(true);
   };
 
-  // KART TASARIMI RENDER FONKSİYONU
-  const renderCard = (card: Card, isPlayable: boolean = false, onClick?: () => void) => {
-      const isWild = card.color === 'wild';
+  // YENİ: Sadece görsel render döndüren saf kart fonksiyonu
+  const renderCardVisual = (card: Card) => {
       const displayVal = card.value === 'skip' ? '🚫' : 
                          card.value === 'reverse' ? '🔄' : 
                          card.value === 'draw2' ? '+2' : 
@@ -374,67 +393,85 @@ export default function UnoPage() {
                          card.value === 'wild' ? '🌈' : card.value;
 
       return (
-          <button 
-             onClick={onClick}
-             disabled={!isPlayable}
-             className={`relative w-16 h-24 sm:w-20 sm:h-32 rounded-xl border-4 flex flex-col items-center justify-center shadow-lg transition-all duration-300 transform 
-                 ${COLORS[card.color]} border-white
-                 ${isPlayable ? 'hover:-translate-y-4 hover:shadow-2xl cursor-pointer ring-2 ring-white/50 z-10' : 'opacity-80 cursor-not-allowed hover:z-0'}
-             `}
-          >
+          <div className={`relative w-16 h-24 sm:w-20 sm:h-28 rounded-xl border-[3px] flex flex-col items-center justify-center shadow-lg bg-white ${COLORS[card.color]} border-white`}>
               <div className="absolute top-1 left-2 text-white font-black text-xs sm:text-sm drop-shadow-md">{displayVal}</div>
-              <div className="bg-white/20 w-12 h-16 sm:w-16 sm:h-24 rounded-full flex items-center justify-center transform -rotate-12">
+              <div className="bg-white/20 w-12 h-16 sm:w-14 sm:h-20 rounded-full flex items-center justify-center transform -rotate-12">
                   <span className="text-white font-black text-2xl sm:text-3xl drop-shadow-lg" style={{ textShadow: '2px 2px 0 #000' }}>
                       {displayVal}
                   </span>
               </div>
               <div className="absolute bottom-1 right-2 text-white font-black text-xs sm:text-sm transform rotate-180 drop-shadow-md">{displayVal}</div>
-          </button>
+          </div>
       );
   };
 
-  // Dinamik Arka Plan Rengi
-  const bgGlow = currentColor === 'red' ? 'rgba(239,68,68,0.1)' :
-                 currentColor === 'blue' ? 'rgba(59,130,246,0.1)' :
-                 currentColor === 'green' ? 'rgba(34,197,94,0.1)' :
-                 currentColor === 'yellow' ? 'rgba(250,204,21,0.1)' : 'transparent';
+  // Arka Plan Masa Örtüsü ve Işıklar
+  const bgTableColor = phase === "playing" ? "bg-[#0f5132]" : "bg-[#0f172a]";
 
   return (
-    <main className="flex flex-col min-h-screen transition-colors duration-500 relative" style={{ backgroundColor: phase === "playing" ? bgGlow : '#0f172a' }}>
+    <main className={`flex flex-col min-h-screen transition-colors duration-500 relative ${bgTableColor}`}>
       
-      {/* OYUN EKRANI (Ana Odak) */}
+      {/* MASA ÖRTÜSÜ DOKUSU */}
+      {phase === "playing" && (
+         <div className="absolute inset-0 pointer-events-none opacity-[0.15]" style={{ backgroundImage: 'radial-gradient(#ffffff 1px, transparent 1px)', backgroundSize: '24px 24px' }}></div>
+      )}
+
+      {/* OYUN EKRANI */}
       {phase === "playing" ? (
-        <div className="flex-1 flex flex-col justify-between w-full h-[100dvh] overflow-hidden py-4 px-2">
+        <div className="flex-1 flex flex-col justify-between w-full h-[100dvh] overflow-hidden py-4 px-2 z-10">
             
-            {/* TEPKİ EFEKTİ */}
+            {/* TEPKİ EFEKTİ (EMOJİ) */}
             {reaction && (
                 <div className="absolute inset-0 pointer-events-none flex items-center justify-center z-50 animate-in zoom-in duration-300">
                     <span className="text-[150px] drop-shadow-2xl animate-bounce">{reaction}</span>
                 </div>
             )}
 
-            {/* ÜST: Efsun'un Eli (Rakip) */}
-            <div className="w-full flex flex-col items-center gap-2 mt-2 relative">
-                <div className="flex items-center gap-3">
-                    <span className="bg-black/40 px-4 py-1 rounded-full text-white text-xs font-bold tracking-widest uppercase shadow-inner">
+            {/* UNO BİLDİRİM EFEKTİ */}
+            {unoNotification && (
+                <div className="absolute inset-0 pointer-events-none flex items-center justify-center z-50 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
+                    <h1 className="display-font text-5xl md:text-7xl text-yellow-400 font-black tracking-widest uppercase animate-bounce drop-shadow-[0_10px_20px_rgba(0,0,0,0.8)] text-center px-4">
+                        {unoNotification}
+                    </h1>
+                </div>
+            )}
+
+            {/* ÜST: Efsun'un Eli (Yelpaze Kartlar) */}
+            <div className="w-full flex flex-col items-center gap-2 mt-2 relative h-32 sm:h-40">
+                <div className="flex items-center gap-3 absolute top-0 z-20">
+                    <span className="bg-black/60 backdrop-blur-md px-4 py-1 rounded-full text-white text-xs font-bold tracking-widest uppercase shadow-md border border-white/10">
                         {targetOpponent}
                     </span>
                     {currentTurn === targetOpponent && pendingAction === "none" && (
-                        <span className="text-[10px] bg-primary text-background px-2 py-0.5 rounded animate-pulse font-bold">DÜŞÜNÜYOR...</span>
+                        <span className="text-[10px] bg-yellow-400 text-black px-2 py-0.5 rounded animate-pulse font-bold">DÜŞÜNÜYOR...</span>
                     )}
                 </div>
                 
-                <div className="flex justify-center -space-x-8 sm:-space-x-10 px-10">
-                    {Array.from({ length: opponentHandCount }).map((_, i) => (
-                        <div key={i} className="w-12 h-16 sm:w-16 sm:h-24 bg-red-600 border-2 border-white rounded-xl shadow-lg flex items-center justify-center transform rotate-180">
-                            <span className="text-yellow-400 font-black text-xl italic" style={{ textShadow: '1px 1px 0 #000' }}>UNO</span>
-                        </div>
-                    ))}
+                {/* Rakip Yelpaze */}
+                <div className="relative w-full h-full flex justify-center mt-6">
+                    {Array.from({ length: opponentHandCount }).map((_, i) => {
+                        const offset = i - (opponentHandCount - 1) / 2;
+                        const rotation = offset * -8; // Ters kavis
+                        const translateY = Math.abs(offset) * -3; 
+                        const translateX = offset * 25; 
+                        
+                        return (
+                            <div key={i} className="absolute origin-top transition-all duration-500 ease-out"
+                                 style={{ 
+                                     transform: `translateX(${translateX}px) translateY(${translateY}px) rotate(${rotation}deg)`,
+                                     zIndex: opponentHandCount - i
+                                 }}>
+                                 <div className="w-14 h-20 sm:w-16 sm:h-24 bg-red-600 border-2 border-white rounded-xl shadow-md flex items-center justify-center transform rotate-180">
+                                     <span className="text-yellow-400 font-black text-lg italic" style={{ textShadow: '1px 1px 0 #000' }}>UNO</span>
+                                 </div>
+                            </div>
+                        );
+                    })}
                 </div>
 
-                {/* YAKALA BUTONU (Rakip Uno Demeyi Unutursa) */}
+                {/* YAKALA BUTONU */}
                 {opponentHandCount === 1 && !opponentUnoSaid && (
-                    <button onClick={catchUno} className="absolute right-4 top-10 bg-red-500 text-white font-black px-4 py-2 rounded-xl shadow-[0_0_20px_rgba(239,68,68,0.6)] animate-pulse hover:scale-110 active:scale-95 transition-transform z-20">
+                    <button onClick={catchUno} className="absolute right-4 top-4 bg-red-500 text-white font-black px-4 py-2 rounded-xl shadow-[0_0_20px_rgba(239,68,68,0.6)] animate-pulse hover:scale-110 active:scale-95 transition-transform z-30 border border-white/30">
                         💥 YAKALA!
                     </button>
                 )}
@@ -443,8 +480,8 @@ export default function UnoPage() {
             {/* ORTA: Masa (Deste ve Atılan Kart) */}
             <div className="w-full flex items-center justify-center gap-6 sm:gap-12 relative my-auto">
                 
-                {/* Gelecek Rengi Gösteren Parıltı Arkası */}
-                <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 blur-3xl opacity-50 rounded-full pointer-events-none transition-colors duration-500 ${COLORS[currentColor]}`}></div>
+                {/* Renge Göre Parlayan Masa Ortası */}
+                <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] h-[300px] blur-[80px] opacity-60 rounded-full pointer-events-none transition-colors duration-500 ${COLORS[currentColor]}`}></div>
 
                 {/* Çekme Destesi */}
                 <button 
@@ -456,11 +493,11 @@ export default function UnoPage() {
                 </button>
 
                 {/* Atılan Kart (Discard) */}
-                <div className="z-10">
-                    {discardPile.length > 0 && renderCard(discardPile[discardPile.length - 1], false)}
+                <div className="z-10 shadow-2xl scale-110 transform rotate-2">
+                    {discardPile.length > 0 && renderCardVisual(discardPile[discardPile.length - 1])}
                 </div>
 
-                {/* YENİ: Renk Seçim Modalı (Sadece Sıra Sendeyse ve Seçiyorsan Çıkar) */}
+                {/* Renk Seçim Modalı */}
                 {pendingAction === "choosing_color" && currentTurn === currentUser && (
                     <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-black/80 backdrop-blur-md p-6 rounded-3xl z-50 flex flex-col items-center shadow-[0_0_50px_rgba(0,0,0,0.8)] border border-white/10 animate-in zoom-in">
                         <span className="text-white font-black uppercase tracking-widest mb-4">Renk Seç</span>
@@ -475,20 +512,19 @@ export default function UnoPage() {
 
                 {/* Tepki Butonları */}
                 <div className="absolute right-2 top-1/2 -translate-y-1/2 flex flex-col gap-2 z-20">
-                    <button onClick={() => sendReaction("🤬")} className="text-2xl bg-black/40 w-10 h-10 rounded-full hover:bg-white/20 transition-colors">🤬</button>
-                    <button onClick={() => sendReaction("🤣")} className="text-2xl bg-black/40 w-10 h-10 rounded-full hover:bg-white/20 transition-colors">🤣</button>
-                    <button onClick={() => sendReaction("😎")} className="text-2xl bg-black/40 w-10 h-10 rounded-full hover:bg-white/20 transition-colors">😎</button>
+                    <button onClick={() => sendReaction("🤬")} className="text-2xl bg-black/40 w-10 h-10 rounded-full hover:bg-white/20 transition-colors border border-white/10">🤬</button>
+                    <button onClick={() => sendReaction("🤣")} className="text-2xl bg-black/40 w-10 h-10 rounded-full hover:bg-white/20 transition-colors border border-white/10">🤣</button>
+                    <button onClick={() => sendReaction("😎")} className="text-2xl bg-black/40 w-10 h-10 rounded-full hover:bg-white/20 transition-colors border border-white/10">😎</button>
                 </div>
             </div>
 
-            {/* ALT: Senin Elin */}
-            <div className="w-full flex flex-col items-center gap-4 mb-4 z-20">
-                <div className="flex items-center gap-4 w-full justify-between px-6">
-                    {/* UNO BUTONU (Hayat Kurtarır) */}
+            {/* ALT: Senin Elin (Yelpaze Kartlar) */}
+            <div className="w-full flex flex-col items-center gap-2 mb-4 z-20 h-48 sm:h-56 relative">
+                <div className="flex items-center gap-4 w-full justify-between px-6 absolute top-0 z-30">
                     <button 
                         onClick={sayUno} 
                         disabled={myHand.length > 2 || myUnoSaid}
-                        className={`font-black text-xl px-6 py-2 rounded-full border-4 shadow-xl transition-all uppercase italic tracking-widest
+                        className={`font-black text-lg px-6 py-2 rounded-full border-[3px] shadow-xl transition-all uppercase italic tracking-widest
                             ${myUnoSaid ? 'bg-green-500 text-white border-green-300 scale-95 opacity-50' : 
                               myHand.length <= 2 ? 'bg-yellow-400 text-red-600 border-red-500 hover:scale-110 animate-pulse' : 
                               'bg-black/40 text-white/30 border-black/20 cursor-not-allowed'}`}
@@ -496,27 +532,42 @@ export default function UnoPage() {
                         {myUnoSaid ? "DEDİN!" : "UNO!"}
                     </button>
                     
-                    <span className="bg-black/40 px-4 py-1 rounded-full text-white text-xs font-bold tracking-widest uppercase shadow-inner">
+                    <span className="bg-black/60 backdrop-blur-md px-4 py-1 rounded-full text-white text-xs font-bold tracking-widest uppercase shadow-md border border-white/10">
                         Senin Elin ({myHand.length})
                     </span>
                 </div>
 
-                {/* Kartları Yatay Dizme (Taşarsa kaydırılır) */}
-                <div className="w-full max-w-[100vw] overflow-x-auto custom-scrollbar px-4 pb-8 pt-4">
-                    <div className="flex justify-center min-w-max -space-x-6 sm:-space-x-8 px-4">
-                        {myHand.map((card, i) => {
-                            const topCard = discardPile[discardPile.length - 1];
-                            const isPlayable = currentTurn === currentUser && 
-                                               pendingAction === "none" && 
-                                               (card.color === 'wild' || card.color === currentColor || card.value === topCard.value);
-                            
-                            return (
-                                <div key={card.id} className="transition-transform duration-300">
-                                    {renderCard(card, isPlayable, () => handlePlayCard(i))}
-                                </div>
-                            );
-                        })}
-                    </div>
+                {/* Senin Yelpaze */}
+                <div className="relative w-full h-full flex justify-center mt-12">
+                    {myHand.map((card, i) => {
+                        const topCard = discardPile[discardPile.length - 1];
+                        const isPlayable = currentTurn === currentUser && pendingAction === "none" && 
+                                           (card.color === 'wild' || card.color === currentColor || card.value === topCard.value);
+                        
+                        const offset = i - (myHand.length - 1) / 2;
+                        const rotation = offset * 8; // Kavis açısı
+                        const translateY = Math.abs(offset) * 4; // Aşağı doğru kavis
+                        const translateX = offset * 30; // Kartlar arası mesafe
+                        
+                        return (
+                            <div key={card.id} 
+                                 className={`absolute origin-bottom transition-all duration-500 ease-out 
+                                     ${isPlayable ? 'hover:-translate-y-8 hover:scale-110 cursor-pointer' : 'opacity-80 cursor-not-allowed'}
+                                 `}
+                                 style={{ 
+                                     transform: `translateX(${translateX}px) translateY(${translateY}px) rotate(${rotation}deg)`,
+                                     zIndex: isPlayable ? i + 10 : i // Oynanabilen kartlar hover yaparken öne çıksın diye
+                                 }}>
+                                {renderCardVisual(card)}
+                                {/* Görselin üzerine şeffaf buton ekleyerek tıklamayı yönetiyoruz (Transformu bozmamak için) */}
+                                <button 
+                                   onClick={() => isPlayable && handlePlayCard(i)} 
+                                   className="absolute inset-0 w-full h-full z-20 outline-none" 
+                                   disabled={!isPlayable}
+                                />
+                            </div>
+                        );
+                    })}
                 </div>
             </div>
 
@@ -594,6 +645,8 @@ export default function UnoPage() {
                       {isOpponentReady ? "KARTLARI DAĞIT 🚀" : "EFSUN BEKLENİYOR..."}
                     </button>
                   )}
+
+                  <button onClick={exitLobby} className="text-[10px] text-red-500 uppercase tracking-widest font-bold mt-2 hover:underline text-center w-full">Odadan Çık</button>
                 </div>
             )}
 
@@ -602,21 +655,21 @@ export default function UnoPage() {
                   <div className="text-7xl drop-shadow-lg">👑</div>
                   
                   <h2 className="display-font text-5xl text-primary mb-2 text-center font-black">
-                    {myHand.length === 0 ? "KAZANDIN!" : "KAYBETTİN..."}
+                    {winner === currentUser ? "KAZANDIN!" : "KAYBETTİN..."}
                   </h2>
                   
                   <p className="text-text/70 mb-6 text-center text-sm px-4 font-medium">
-                    {myHand.length === 0 ? "Eline sağlık, rakibini masaya gömdün!" : "Senden önce kartlarını bitirdi. Acil rövanş lazım!"}
+                    {winner === currentUser ? "Eline sağlık, rakibini masaya gömdün!" : "Senden önce kartlarını bitirdi. Acil rövanş lazım!"}
                   </p>
 
-                  {myHand.length === 0 && !isSaved ? (
+                  {winner === currentUser && !isSaved ? (
                      <button 
                       onClick={saveScoreToDatabase}
                       className="w-full bg-primary text-background py-4 rounded-2xl font-bold shadow-lg hover:scale-[1.02] transition-transform text-lg mb-4 uppercase tracking-widest"
                     >
                       Galibiyeti Kaydet 💾
                     </button>
-                  ) : myHand.length === 0 ? (
+                  ) : winner === currentUser ? (
                     <div className="w-full bg-green-500/10 border border-green-500/30 text-green-500 p-4 rounded-2xl font-bold text-center mb-4">
                       Skor başarıyla kaydedildi! ✅
                     </div>
