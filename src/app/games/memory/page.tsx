@@ -28,12 +28,13 @@ export default function MemoryGamePage() {
     timeLimit: 10
   });
 
-  // YENİ: "waitingRoom" (Lobi) fazı eklendi
   const [phase, setPhase] = useState<"modeSelect" | "waitingRoom" | "settings" | "memorize" | "playing" | "roundResult" | "finalResult">("modeSelect");
   const [playMode, setPlayMode] = useState<"single" | "multi" | null>(null);
   
-  // YENİ: Lobi durumlarını tutan stateler
+  // YENİ: Lobi ve Hazır Olma Mantığı Stateleri
   const [opponentJoined, setOpponentJoined] = useState(false);
+  const [isOpponentReady, setIsOpponentReady] = useState(false);
+  const [isMeReady, setIsMeReady] = useState(false);
   const targetOpponent = currentUser === "Emircan" ? "Efsun" : "Emircan";
 
   const [currentRound, setCurrentRound] = useState(1);
@@ -62,7 +63,7 @@ export default function MemoryGamePage() {
     fetchLeaderboard();
   }, []);
 
-  // YENİ: Lobi ve Çok Oyunculu Eşleşme Dinleyicisi (Supabase Realtime)
+  // YENİ: Çok Oyunculu Realtime Senkronizasyon (Senin tasarladığın lobi mantığı)
   useEffect(() => {
     if (playMode !== "multi") return;
 
@@ -71,18 +72,43 @@ export default function MemoryGamePage() {
       const myState = amIEmircan ? data.p1_state : data.p2_state;
       const opponentState = amIEmircan ? data.p2_state : data.p1_state;
 
-      // Karşı taraf katılmış mı?
+      // Rakip Odaya Katıldı Mı?
       if (opponentState && opponentState.joined) {
         setOpponentJoined(true);
-        // İkimiz de masadaysak ve ben lobi ekranındaysam maça (ayarlara) geçiş yap
-        if (myState && myState.joined) {
+        if (myState && myState.joined && data.status === 'waiting' && phase === "waitingRoom") {
           setTimeout(() => {
-            setPhase((prevPhase) => prevPhase === "waitingRoom" ? "settings" : prevPhase);
+            setPhase("settings");
             playSound("success");
-          }, 1500); // Rakip bulununca 1.5 saniye animasyon izletip maça atar
+          }, 1500); 
         }
       } else {
         setOpponentJoined(false);
+        setIsOpponentReady(false);
+      }
+
+      // Rakip "Hazır" Butonuna Bastı Mı?
+      if (opponentState && opponentState.ready) {
+         setIsOpponentReady(true);
+      } else {
+         setIsOpponentReady(false);
+      }
+
+      // Emircan Oyunu Başlattı Mı? (İki ekranı aynı anda oyuna atar)
+      if (data.status === 'playing' && phase === "settings") {
+         if (data.shared_data && data.shared_data.settings) {
+            setSettings(data.shared_data.settings);
+         }
+         if (data.shared_data && data.shared_data.targetColor) {
+            setTargetColor(data.shared_data.targetColor); // İkinize de AYNI rengi verir
+         }
+         setCurrentRound(1);
+         setScores([]);
+         setSelectedPlayer(null);
+         setIsSaved(false);
+         setUserColor({ h: 320, s: 50, l: 50 }); 
+         setMemorizeTime(4); 
+         setPhase("memorize");
+         playSound("start");
       }
     };
 
@@ -101,7 +127,7 @@ export default function MemoryGamePage() {
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [playMode, currentUser]);
+  }, [playMode, currentUser, phase]);
 
   const fetchLeaderboard = async () => {
     const { data } = await supabase.from('game_scores').select('*').eq('game_name', 'memory');
@@ -127,69 +153,66 @@ export default function MemoryGamePage() {
     fetchLeaderboard();
   };
 
-  // YENİ: Masaya (Lobiye) Katılma Fonksiyonu
   const joinMultiplayer = async () => {
     setPlayMode("multi");
     setPhase("waitingRoom");
+    setIsMeReady(false);
     playSound("click");
 
     const playerField = currentUser === "Emircan" ? "p1_state" : "p2_state";
     await supabase.from('multiplayer_state').update({
-      [playerField]: { joined: true }
+      [playerField]: { joined: true, ready: false },
+      status: 'waiting'
     }).eq('id', 1);
   };
 
-  // YENİ: Masadan (Lobiden) Çıkma Fonksiyonu
   const leaveMultiplayer = async () => {
     playSound("click");
     const playerField = currentUser === "Emircan" ? "p1_state" : "p2_state";
     await supabase.from('multiplayer_state').update({
-      [playerField]: { joined: false }
+      [playerField]: { joined: false, ready: false }
     }).eq('id', 1);
     
     setPhase("modeSelect");
     setPlayMode(null);
+    setIsMeReady(false);
   };
 
-  useEffect(() => {
-    let timer: NodeJS.Timeout;
+  // YENİ: Efsun İçin Hazır Olma Fonksiyonu
+  const toggleReady = async () => {
+    playSound("click");
+    const newReadyState = !isMeReady;
+    setIsMeReady(newReadyState);
+    
+    const playerField = currentUser === "Emircan" ? "p1_state" : "p2_state";
+    await supabase.from('multiplayer_state').update({
+      [playerField]: { joined: true, ready: newReadyState }
+    }).eq('id', 1);
+  };
 
-    if (phase === "memorize") {
-      if (memorizeTime > 0) {
-        timer = setTimeout(() => {
-          setMemorizeTime(m => m - 1);
-          playSound("memory_tick");
-        }, 1000);
-      } else {
-        setPhase("playing");
-        setTimeLeft(settings.timeLimit); 
-        playSound("start");
+  // YENİ: Emircan İçin Oyunu (Herkesi) Başlatma Fonksiyonu
+  const startMultiplayerGame = async () => {
+    playSound("click");
+    const initialColor = generateRandomColor(); // İkiniz için de geçerli olacak o ilk renk
+    
+    await supabase.from('multiplayer_state').update({
+      status: 'playing',
+      shared_data: { 
+        settings: settings,
+        targetColor: initialColor,
+        currentRound: 1
       }
-    } 
-    else if (phase === "playing" && settings.mode === "timed") {
-      if (timeLeft > 0) {
-        timer = setTimeout(() => {
-          setTimeLeft(t => t - 1);
-          if (timeLeft <= 4) playSound("tick");
-        }, 1000);
-      } else {
-        finishRound();
-      }
-    }
+    }).eq('id', 1);
+  };
 
-    return () => clearTimeout(timer);
-  }, [phase, memorizeTime, timeLeft, settings]);
-
-  const startGame = () => {
+  // TEK OYUNCULU İÇİN KLASİK BAŞLANGIÇ
+  const startSinglePlayerGame = () => {
     playSound("click");
     setCurrentRound(1);
     setScores([]);
     setSelectedPlayer(null);
     setIsSaved(false);
-    startNextRound();
-  };
-
-  const startNextRound = () => {
+    
     setTargetColor(generateRandomColor());
     setUserColor({ h: 320, s: 50, l: 50 }); 
     setMemorizeTime(4); 
@@ -208,19 +231,62 @@ export default function MemoryGamePage() {
     playSound("click");
     if (currentRound < settings.rounds) {
       setCurrentRound(prev => prev + 1);
-      startNextRound();
+      
+      if (playMode === "multi") {
+         // Not: İleride raund senkronizasyonu için burası da Realtime üzerinden tetiklenebilir
+         // Şimdilik yerel devam ediyor
+         setTargetColor(generateRandomColor());
+      } else {
+         setTargetColor(generateRandomColor());
+      }
+
+      setUserColor({ h: 320, s: 50, l: 50 }); 
+      setMemorizeTime(4); 
+      setPhase("memorize");
     } else {
       playSound("over");
       setPhase("finalResult");
+      
+      // Maç bitince lobiyi sıfırla
+      if (playMode === "multi" && currentUser === "Emircan") {
+         supabase.from('multiplayer_state').update({ status: 'waiting' }).eq('id', 1);
+      }
     }
   };
 
-  // Uygulama kapandığında lobiden düşürmek için
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+
+    if (phase === "memorize") {
+      if (memorizeTime > 0) {
+        timer = setTimeout(() => {
+          setMemorizeTime(m => m - 1);
+          playSound("memory_tick");
+        }, 1000);
+      } else {
+        setPhase("playing");
+        setTimeLeft(settings.timeLimit); 
+      }
+    } 
+    else if (phase === "playing" && settings.mode === "timed") {
+      if (timeLeft > 0) {
+        timer = setTimeout(() => {
+          setTimeLeft(t => t - 1);
+          if (timeLeft <= 4) playSound("tick");
+        }, 1000);
+      } else {
+        finishRound();
+      }
+    }
+
+    return () => clearTimeout(timer);
+  }, [phase, memorizeTime, timeLeft, settings]);
+
   useEffect(() => {
     const handleBeforeUnload = () => {
       if (playMode === "multi") {
          const playerField = currentUser === "Emircan" ? "p1_state" : "p2_state";
-         supabase.from('multiplayer_state').update({ [playerField]: { joined: false } }).eq('id', 1).then();
+         supabase.from('multiplayer_state').update({ [playerField]: { joined: false, ready: false } }).eq('id', 1).then();
       }
     };
     window.addEventListener("beforeunload", handleBeforeUnload);
@@ -237,7 +303,7 @@ export default function MemoryGamePage() {
         }
       `}} />
 
-      {phase !== "waitingRoom" && (
+      {phase !== "waitingRoom" && phase !== "memorize" && phase !== "playing" && phase !== "roundResult" && (
         <div className="flex items-center mb-4">
           <Link href="/games" onClick={() => playSound("click")} className="bg-card px-3 py-1.5 rounded-lg border border-primary/20 text-primary hover:bg-primary hover:text-background transition-all flex items-center gap-2 text-xs font-bold shadow-sm">
             <span>←</span> Oyunlar
@@ -277,7 +343,6 @@ export default function MemoryGamePage() {
         </div>
       )}
 
-      {/* YENİ: BEKLEME LOBİSİ (Ortak Masa) */}
       {phase === "waitingRoom" && (
         <div className="flex-1 flex flex-col items-center justify-center animate-in zoom-in max-w-md mx-auto w-full text-center">
           
@@ -320,9 +385,12 @@ export default function MemoryGamePage() {
 
       {phase === "settings" && (
         <div className="flex-1 flex flex-col gap-6 animate-in slide-in-from-right-5 max-w-md mx-auto w-full">
+          
           <div className="text-center mb-2">
             <div className="text-5xl mb-2">⚙️</div>
-            <h2 className="display-font text-3xl text-primary">Oda Ayarları</h2>
+            <h2 className="display-font text-3xl text-primary">
+              {playMode === "multi" && currentUser === "Efsun" ? "Bekleme Odası" : "Oda Ayarları"}
+            </h2>
             <p className="text-text/70 text-sm font-medium">
               Mod: <span className="text-primary font-bold">{playMode === "single" ? "Tek Oyunculu" : "Çok Oyunculu"}</span>
             </p>
@@ -340,61 +408,116 @@ export default function MemoryGamePage() {
             </div>
           </div>
           
-          <div className="bg-card border border-primary/20 rounded-3xl p-6 shadow-xl flex flex-col gap-6">
-            <div>
-              <label className="text-xs uppercase tracking-widest text-primary font-bold mb-3 block">Kaç Tur Oynanacak?</label>
-              <div className="flex flex-wrap gap-2">
-                {[3, 4, 5, 6, 7, 8, 9, 10].map(num => (
-                  <button 
-                    key={num}
-                    onClick={() => { setSettings({...settings, rounds: num}); playSound("click"); }}
-                    className={`w-10 h-10 rounded-xl font-bold transition-all ${settings.rounds === num ? 'bg-primary text-background scale-110 shadow-lg' : 'bg-background border border-primary/20 text-text/70 hover:border-primary/50'}`}
-                  >
-                    {num}
-                  </button>
-                ))}
+          {/* YENİ: EFSUN SADECE HAZIR BUTONUNU GÖRÜR */}
+          {playMode === "multi" && currentUser === "Efsun" ? (
+            <div className="bg-card border border-primary/20 rounded-3xl p-8 shadow-xl flex flex-col items-center gap-6 mt-4">
+              <div className="text-center">
+                <div className="text-4xl mb-4 animate-bounce">⏳</div>
+                <h3 className="display-font text-2xl text-primary mb-2">Kurallar Belirleniyor</h3>
+                <p className="text-text/60 text-xs font-bold tracking-widest uppercase">
+                  Emircan oyun ayarlarını seçiyor...
+                </p>
               </div>
-            </div>
 
-            <div>
-              <label className="text-xs uppercase tracking-widest text-primary font-bold mb-3 block">Oyun Modu</label>
-              <div className="flex gap-3">
-                <button 
-                  onClick={() => { setSettings({...settings, mode: "relaxed"}); playSound("click"); }}
-                  className={`flex-1 p-3 rounded-xl font-bold text-sm transition-all ${settings.mode === "relaxed" ? 'bg-primary text-background shadow-lg' : 'bg-background border border-primary/20 text-text/70'}`}
-                >
-                  ☕ Rahat Mod
-                </button>
-                <button 
-                  onClick={() => { setSettings({...settings, mode: "timed"}); playSound("click"); }}
-                  className={`flex-1 p-3 rounded-xl font-bold text-sm transition-all ${settings.mode === "timed" ? 'bg-primary text-background shadow-lg' : 'bg-background border border-primary/20 text-text/70'}`}
-                >
-                  ⏱️ Süreli Mod
-                </button>
-              </div>
-            </div>
+              <button 
+                onClick={toggleReady}
+                className={`w-full py-5 rounded-[24px] font-black text-xl tracking-widest uppercase shadow-2xl transition-all duration-300 ${
+                  isMeReady 
+                    ? 'bg-green-500 text-white hover:bg-green-600 scale-[1.02] border-4 border-green-400/50' 
+                    : 'bg-card border-4 border-primary text-primary hover:bg-primary hover:text-background'
+                }`}
+              >
+                {isMeReady ? "👍 HAZIRSIN" : "HAZIRIM"}
+              </button>
 
-            {settings.mode === "timed" && (
-              <div className="animate-in fade-in slide-in-from-top-2">
-                <label className="text-xs uppercase tracking-widest text-primary font-bold mb-3 block text-red-500">Sayaç Süresi (Saniye)</label>
-                <div className="flex gap-2">
-                  {[5, 10, 15, 20].map(time => (
+              {isMeReady && (
+                <p className="text-[10px] text-green-500 font-bold uppercase tracking-widest animate-pulse mt-[-10px]">
+                  Emircan'ın başlatması bekleniyor...
+                </p>
+              )}
+            </div>
+          ) : (
+            // EMİRCAN VEYA TEK OYUNCULU İÇİN AYARLAR MENÜSÜ
+            <div className="bg-card border border-primary/20 rounded-3xl p-6 shadow-xl flex flex-col gap-6">
+              <div>
+                <label className="text-xs uppercase tracking-widest text-primary font-bold mb-3 block">Kaç Tur Oynanacak?</label>
+                <div className="flex flex-wrap gap-2">
+                  {[3, 4, 5, 6, 7, 8, 9, 10].map(num => (
                     <button 
-                      key={time}
-                      onClick={() => { setSettings({...settings, timeLimit: time}); playSound("click"); }}
-                      className={`flex-1 py-2 rounded-xl font-bold transition-all ${settings.timeLimit === time ? 'bg-red-500 text-white shadow-lg' : 'bg-background border border-red-500/20 text-text/70'}`}
+                      key={num}
+                      onClick={() => { setSettings({...settings, rounds: num}); playSound("click"); }}
+                      className={`w-10 h-10 rounded-xl font-bold transition-all ${settings.rounds === num ? 'bg-primary text-background scale-110 shadow-lg' : 'bg-background border border-primary/20 text-text/70 hover:border-primary/50'}`}
                     >
-                      {time}s
+                      {num}
                     </button>
                   ))}
                 </div>
               </div>
-            )}
-          </div>
 
-          <button onClick={startGame} className="w-full mt-2 bg-primary text-background p-4 rounded-2xl shadow-xl hover:scale-[1.02] transition-transform font-bold text-lg">
-            Oyunu Başlat 🚀
-          </button>
+              <div>
+                <label className="text-xs uppercase tracking-widest text-primary font-bold mb-3 block">Oyun Modu</label>
+                <div className="flex gap-3">
+                  <button 
+                    onClick={() => { setSettings({...settings, mode: "relaxed"}); playSound("click"); }}
+                    className={`flex-1 p-3 rounded-xl font-bold text-sm transition-all ${settings.mode === "relaxed" ? 'bg-primary text-background shadow-lg' : 'bg-background border border-primary/20 text-text/70'}`}
+                  >
+                    ☕ Rahat Mod
+                  </button>
+                  <button 
+                    onClick={() => { setSettings({...settings, mode: "timed"}); playSound("click"); }}
+                    className={`flex-1 p-3 rounded-xl font-bold text-sm transition-all ${settings.mode === "timed" ? 'bg-primary text-background shadow-lg' : 'bg-background border border-primary/20 text-text/70'}`}
+                  >
+                    ⏱️ Süreli Mod
+                  </button>
+                </div>
+              </div>
+
+              {settings.mode === "timed" && (
+                <div className="animate-in fade-in slide-in-from-top-2">
+                  <label className="text-xs uppercase tracking-widest text-primary font-bold mb-3 block text-red-500">Sayaç Süresi (Saniye)</label>
+                  <div className="flex gap-2">
+                    {[5, 10, 15, 20].map(time => (
+                      <button 
+                        key={time}
+                        onClick={() => { setSettings({...settings, timeLimit: time}); playSound("click"); }}
+                        className={`flex-1 py-2 rounded-xl font-bold transition-all ${settings.timeLimit === time ? 'bg-red-500 text-white shadow-lg' : 'bg-background border border-red-500/20 text-text/70'}`}
+                      >
+                        {time}s
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* EMİRCAN İÇİN BAŞLAT BUTONU MANTIĞI */}
+          {playMode === "multi" && currentUser === "Emircan" ? (
+            <button 
+              onClick={startMultiplayerGame}
+              disabled={!isOpponentReady}
+              className={`w-full mt-2 p-5 rounded-2xl shadow-xl transition-all duration-300 font-black text-lg tracking-widest uppercase ${
+                isOpponentReady 
+                  ? 'bg-primary text-background hover:scale-[1.02] ring-4 ring-primary/30' 
+                  : 'bg-background border-2 border-primary/20 text-primary/40 cursor-not-allowed'
+              }`}
+            >
+              {isOpponentReady ? "OYUNU BAŞLAT 🚀" : "EFSUN'UN HAZIR OLMASI BEKLENİYOR..."}
+            </button>
+          ) : playMode === "single" && (
+            <button 
+              onClick={startSinglePlayerGame} 
+              className="w-full mt-2 bg-primary text-background p-4 rounded-2xl shadow-xl hover:scale-[1.02] transition-transform font-bold text-lg"
+            >
+              Oyunu Başlat 🚀
+            </button>
+          )}
+
+          {playMode === "multi" && (
+             <button onClick={leaveMultiplayer} className="text-[10px] text-red-500 uppercase tracking-widest font-bold mt-2 hover:underline text-center w-full">
+               Odadan Çık
+             </button>
+          )}
         </div>
       )}
 
@@ -525,7 +648,8 @@ export default function MemoryGamePage() {
             <button 
               onClick={() => { 
                 setPhase("modeSelect"); 
-                setPlayMode(null); 
+                setPlayMode(null);
+                setIsMeReady(false);
                 playSound("click"); 
               }} 
               className="w-full bg-card border border-primary/20 text-primary p-4 rounded-2xl shadow-sm hover:border-primary/50 transition-all font-bold text-lg"
