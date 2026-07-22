@@ -159,7 +159,6 @@ export default function MemoryGamePage() {
         }
       }
 
-      // YENİ: Takılma bug'ı çözüldü. Artık direkt Final ekranına geçiriyor.
       if (data.status === 'game_over' && phase !== 'finalResult') {
         setPhase('finalResult');
         playSound("over");
@@ -200,7 +199,11 @@ export default function MemoryGamePage() {
     playSound("click");
     if (playMode === "multi") {
       const playerField = currentUser === "Emircan" ? "p1_state" : "p2_state";
-      await supabase.from('multiplayer_state').update({ [playerField]: { joined: false, ready: false } }).eq('id', 1);
+      // KİM BASARSA BASSIN STATUS WAITING OLUYOR (Efsun da basabilir)
+      await supabase.from('multiplayer_state').update({ 
+        [playerField]: { joined: false, ready: false },
+        status: 'waiting'
+      }).eq('id', 1);
     }
     setPhase("modeSelect");
     setPlayMode(null);
@@ -223,9 +226,11 @@ export default function MemoryGamePage() {
     
     if (playMode === "multi") {
       const playerField = currentUser === "Emircan" ? "p1_state" : "p2_state";
-      const updateData: any = { [playerField]: { joined: true, ready: false, roundFinished: false } };
-      if (currentUser === "Emircan") updateData.status = 'waiting';
-      await supabase.from('multiplayer_state').update(updateData).eq('id', 1);
+      // KİM BASARSA BASSIN STATUS WAITING OLUYOR! (Efsun'un kilidi kırıldı)
+      await supabase.from('multiplayer_state').update({ 
+        [playerField]: { joined: true, ready: false, roundFinished: false },
+        status: 'waiting'
+      }).eq('id', 1);
     }
   };
 
@@ -302,7 +307,6 @@ export default function MemoryGamePage() {
     playSound("click");
     if (currentRound < settings.rounds) {
       if (playMode === "multi") {
-         // YENİ: Artık Efsun da bu butona basıp diğer tura geçirebilir!
          const nextTarget = generateRandomColor();
          await supabase.from('multiplayer_state').update({
             shared_data: { settings, targetColor: nextTarget, round: currentRound + 1 },
@@ -318,7 +322,6 @@ export default function MemoryGamePage() {
       }
     } else {
       if (playMode === "multi") {
-         // YENİ: Artık Efsun da maç sonu butonuna basabilir!
          await supabase.from('multiplayer_state').update({ status: 'game_over' }).eq('id', 1);
       } else if (playMode === "single") {
          const total = scores.reduce((sum, val) => sum + val, 0);
@@ -371,14 +374,6 @@ export default function MemoryGamePage() {
   return (
     <main className="p-5 animate-in fade-in duration-500 pb-24 min-h-screen flex flex-col">
       <style dangerouslySetInnerHTML={{__html: `
-        .dialed-slider { 
-          -webkit-appearance: none; appearance: none; background: transparent; outline: none; margin: 0; 
-          touch-action: none; 
-        }
-        .dialed-slider::-webkit-slider-thumb {
-          -webkit-appearance: none; appearance: none; width: 28px; height: 28px; border-radius: 50%;
-          background: white; box-shadow: 0 2px 10px rgba(0,0,0,0.4); cursor: pointer; border: 2px solid #ccc;
-        }
         .game-active-ui div[class*="fixed"][class*="bottom-"] {
           opacity: 0 !important;
           pointer-events: none !important;
@@ -589,29 +584,42 @@ export default function MemoryGamePage() {
 
           {phase === "playing" && (
             <>
-              {/* YENİ: Mobilde ekranın kaymasını engelleyen touch-none eklendi, efsane ses de geri döndü! */}
-              <div className="absolute top-0 left-0 h-full flex w-32 bg-black/20 backdrop-blur-[4px] border-r border-white/10 touch-none">
-                <div className="flex-1 h-full relative overflow-hidden touch-none">
+              {/* YENİ: KUSURSUZ YEREL DİKEY (VERTICAL) SLIDER SİSTEMİ EKLENDİ! */}
+              <div className="absolute top-0 left-0 h-full flex w-40 bg-black/40 backdrop-blur-md border-r border-white/20 touch-none py-6 px-3 gap-3 shadow-[10px_0_30px_rgba(0,0,0,0.3)] z-10">
+                
+                {/* HUE BAR */}
+                <div className="flex-1 h-full relative touch-none rounded-full shadow-inner border border-white/10" style={{ background: `linear-gradient(to top, #ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff, #ff0000)` }}>
                   <input type="range" min="0" max="360" value={userColor.h} 
                     onChange={(e) => { setUserColor({...userColor, h: parseInt(e.target.value)}); playSound("memory_dial"); }}
-                    className="dialed-slider absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 -rotate-90 w-[500px] h-full"
-                    style={{ background: `linear-gradient(to right, #ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff, #ff0000)` }} />
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                    style={{ WebkitAppearance: 'slider-vertical', writingMode: 'bt-lr' }} />
+                  <div className="absolute left-1/2 w-8 h-8 bg-white rounded-full border-[3px] border-gray-300 shadow-[0_4px_12px_rgba(0,0,0,0.8)] pointer-events-none z-0" 
+                    style={{ bottom: `calc(${(userColor.h / 360) * 100}% - 16px)`, transform: 'translateX(-50%)' }} />
                 </div>
-                <div className="flex-1 h-full relative overflow-hidden touch-none">
+
+                {/* SATURATION BAR */}
+                <div className="flex-1 h-full relative touch-none rounded-full shadow-inner border border-white/10" style={{ background: `linear-gradient(to top, hsl(${userColor.h}, 0%, ${userColor.l}%), hsl(${userColor.h}, 100%, ${userColor.l}%))` }}>
                   <input type="range" min="0" max="100" value={userColor.s} 
                     onChange={(e) => { setUserColor({...userColor, s: parseInt(e.target.value)}); playSound("memory_dial"); }}
-                    className="dialed-slider absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 -rotate-90 w-[500px] h-full"
-                    style={{ background: `linear-gradient(to right, hsl(${userColor.h}, 0%, ${userColor.l}%), hsl(${userColor.h}, 100%, ${userColor.l}%))` }} />
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                    style={{ WebkitAppearance: 'slider-vertical', writingMode: 'bt-lr' }} />
+                  <div className="absolute left-1/2 w-8 h-8 bg-white rounded-full border-[3px] border-gray-300 shadow-[0_4px_12px_rgba(0,0,0,0.8)] pointer-events-none z-0" 
+                    style={{ bottom: `calc(${(userColor.s / 100) * 100}% - 16px)`, transform: 'translateX(-50%)' }} />
                 </div>
-                <div className="flex-1 h-full relative overflow-hidden touch-none">
+
+                {/* LIGHTNESS BAR */}
+                <div className="flex-1 h-full relative touch-none rounded-full shadow-inner border border-white/10" style={{ background: `linear-gradient(to top, #000000, hsl(${userColor.h}, ${userColor.s}%, 50%), #ffffff)` }}>
                   <input type="range" min="0" max="100" value={userColor.l} 
                     onChange={(e) => { setUserColor({...userColor, l: parseInt(e.target.value)}); playSound("memory_dial"); }}
-                    className="dialed-slider absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 -rotate-90 w-[500px] h-full"
-                    style={{ background: `linear-gradient(to right, #000000, hsl(${userColor.h}, ${userColor.s}%, 50%), #ffffff)` }} />
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                    style={{ WebkitAppearance: 'slider-vertical', writingMode: 'bt-lr' }} />
+                  <div className="absolute left-1/2 w-8 h-8 bg-white rounded-full border-[3px] border-gray-300 shadow-[0_4px_12px_rgba(0,0,0,0.8)] pointer-events-none z-0" 
+                    style={{ bottom: `calc(${(userColor.l / 100) * 100}% - 16px)`, transform: 'translateX(-50%)' }} />
                 </div>
+
               </div>
 
-              <button onClick={finishRound} className="absolute bottom-6 right-6 w-16 h-16 bg-white rounded-full flex items-center justify-center shadow-[0_8px_30px_rgb(0,0,0,0.4)] hover:scale-105 active:scale-95 transition-transform z-10 border-4 border-black/10">
+              <button onClick={finishRound} className="absolute bottom-6 right-6 w-16 h-16 bg-white rounded-full flex items-center justify-center shadow-[0_8px_30px_rgb(0,0,0,0.4)] hover:scale-105 active:scale-95 transition-transform z-20 border-4 border-black/10">
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="black" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                   <circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="6"></circle><circle cx="12" cy="12" r="2"></circle>
                 </svg>
@@ -656,7 +664,6 @@ export default function MemoryGamePage() {
             </div>
           </div>
 
-          {/* YENİ: Artık iki oyuncu da bu butonu görüp basabiliyor! Kim basarsa oyun devam eder. */}
           <button onClick={handleNext} className="w-full max-w-xs bg-primary text-background p-4 rounded-2xl shadow-xl hover:scale-[1.02] transition-transform font-bold text-lg">
             {currentRound < settings.rounds ? "Sıradaki Tura Geç ➡️" : "Sonuçları Gör 🏆"}
           </button>
