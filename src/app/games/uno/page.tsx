@@ -380,7 +380,6 @@ export default function UnoPage() {
     setIsSaved(true);
   };
 
-  // EKSİK OLAN LOBİDEN ÇIKMA FONKSİYONU
   const exitLobby = async () => {
     playSound("click");
     const { data } = await supabase.from('multiplayer_state').select('*').eq('id', 1).single();
@@ -403,7 +402,7 @@ export default function UnoPage() {
                          card.value === 'wild' ? '🌈' : card.value;
 
       return (
-          <div className={`relative w-16 h-24 sm:w-20 sm:h-28 rounded-xl border-[3px] flex flex-col items-center justify-center shadow-lg bg-white ${COLORS[card.color]} border-white`}>
+          <div className={`relative w-16 h-24 sm:w-20 sm:h-28 rounded-xl border-[3px] flex flex-col items-center justify-center shadow-lg ${COLORS[card.color]} border-white`}>
               <div className="absolute top-1 left-2 text-white font-black text-xs sm:text-sm drop-shadow-md">{displayVal}</div>
               <div className="bg-white/20 w-12 h-16 sm:w-14 sm:h-20 rounded-full flex items-center justify-center transform -rotate-12">
                   <span className="text-white font-black text-2xl sm:text-3xl drop-shadow-lg" style={{ textShadow: '2px 2px 0 #000' }}>
