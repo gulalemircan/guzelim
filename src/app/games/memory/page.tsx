@@ -20,7 +20,6 @@ const generateRandomColor = () => ({
   l: Math.floor(Math.random() * 60) + 20 
 });
 
-// YENİ: ANDROID İÇİN %100 KUSURSUZ, SIFIR KASMA SLIDER BİLEŞENİ (input type="range" çöpe atıldı!)
 const ColorSlider = ({ max, value, bgGradient, onChange }: { max: number, value: number, bgGradient: string, onChange: (val: number) => void }) => {
   const trackRef = useRef<HTMLDivElement>(null);
   
@@ -66,7 +65,7 @@ export default function MemoryGamePage() {
     timeLimit: 10
   });
 
-  const [phase, setPhase] = useState<"modeSelect" | "settings" | "memorize" | "playing" | "waitingRound" | "finalResult">("modeSelect");
+  const [phase, setPhase] = useState<"modeSelect" | "settings" | "memorize" | "playing" | "waitingRound" | "roundResult" | "finalResult">("modeSelect");
   const [playMode, setPlayMode] = useState<"single" | "multi" | null>(null);
   
   const [isOpponentReady, setIsOpponentReady] = useState(false);
@@ -82,12 +81,18 @@ export default function MemoryGamePage() {
   const [timeLeft, setTimeLeft] = useState(10);
   const [memorizeTime, setMemorizeTime] = useState(3);
   
+  const [currentScore, setCurrentScore] = useState("0");
+  const [opponentCurrentScore, setOpponentCurrentScore] = useState("0");
+  
   const [myFinalScore, setMyFinalScore] = useState<string | null>(null);
   const [opponentFinalScore, setOpponentFinalScore] = useState<string | null>(null);
 
   const [leaderboard, setLeaderboard] = useState({ emircan: 0, efsun: 0 });
   const [isSaved, setIsSaved] = useState(false);
   const [winSaved, setWinSaved] = useState(false);
+  
+  // YENİ: Otomatik Sonraki Tura Geçiş İçin Sayaç State'i
+  const [nextRoundTimer, setNextRoundTimer] = useState<number | null>(null);
 
   const phaseRef = useRef(phase);
   const currentRoundRef = useRef(currentRound);
@@ -154,15 +159,17 @@ export default function MemoryGamePage() {
 
     const checkLobbyStatus = (data: any) => {
       const opState = currentUser === "Emircan" ? data.p2_state : data.p1_state;
+      const myState = currentUser === "Emircan" ? data.p1_state : data.p2_state;
       const currentPhase = phaseRef.current;
       const round = currentRoundRef.current;
 
       if (opState?.ready) setIsOpponentReady(true);
       else setIsOpponentReady(false);
 
+      if (opState?.currentScore) setOpponentCurrentScore(opState.currentScore);
       if (opState?.finalScore) setOpponentFinalScore(opState.finalScore);
 
-      if (data.status === 'waiting' && (currentPhase === 'finalResult' || currentPhase === 'waitingRound')) {
+      if (data.status === 'waiting' && (currentPhase === 'finalResult' || currentPhase === 'waitingRound' || currentPhase === 'roundResult')) {
          setPhase('settings');
          setMyFinalScore(null);
          setOpponentFinalScore(null);
@@ -172,7 +179,6 @@ export default function MemoryGamePage() {
          setIsMeReady(false);
       }
 
-      // YENİ: Otomatik Sonraki Tura Geçiş Senkronizasyonu
       if (data.status === 'playing') {
         if (currentPhase === "settings") {
           setSettings(data.shared_data.settings);
@@ -197,6 +203,15 @@ export default function MemoryGamePage() {
         }
       }
 
+      // YENİ: İKİNİZ DE BİTİRDİĞİNDE OTOMATİK OLARAK 3 SANİYELİK SONUÇ EKRANINA GEÇER
+      if (data.status === 'playing' && myState?.roundFinished && opState?.roundFinished) {
+         if (currentPhase === 'waitingRound') {
+            setPhase('roundResult');
+            setNextRoundTimer(3);
+            playSound("success");
+         }
+      }
+
       if (data.status === 'game_over' && currentPhase !== 'finalResult') {
         setPhase('finalResult');
         playSound("over");
@@ -219,6 +234,55 @@ export default function MemoryGamePage() {
 
     return () => { supabase.removeChannel(channel); };
   }, [playMode, currentUser]); 
+
+  // YENİ: OTOMATİK 3 SANİYE SAYAÇ VE TURA GEÇİŞ SİSTEMİ
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (phase === "roundResult" && nextRoundTimer !== null) {
+      if (nextRoundTimer > 0) {
+        timer = setTimeout(() => {
+          setNextRoundTimer(prev => prev! - 1);
+          playSound("tick");
+        }, 1000);
+      } else if (nextRoundTimer === 0) {
+        setNextRoundTimer(null);
+        
+        if (playMode === "single") {
+           if (currentRoundRef.current < settingsRef.current.rounds) {
+              setCurrentRound(prev => prev + 1);
+              setTargetColor(generateRandomColor());
+              setUserColor({ h: 320, s: 50, l: 50 });
+              setMemorizeTime(4);
+              setPhase("memorize");
+           } else {
+              const total = scoresRef.current.reduce((sum, val) => sum + val, 0);
+              setMyFinalScore((total / scoresRef.current.length).toFixed(1));
+              playSound("over");
+              setPhase("finalResult");
+           }
+        } else if (playMode === "multi" && currentUser === "Emircan") {
+           // Süre bitince diğer turu sadece Emircan veritabanına basar, Efsun o yayından otomatik geçer
+           const goNext = async () => {
+              const { data: latestData } = await supabase.from('multiplayer_state').select('*').eq('id', 1).single();
+              if (latestData) {
+                 if (currentRoundRef.current < settingsRef.current.rounds) {
+                    const nextTarget = generateRandomColor();
+                    await supabase.from('multiplayer_state').update({
+                       shared_data: { ...latestData.shared_data, targetColor: nextTarget, round: currentRoundRef.current + 1 },
+                       p1_state: { ...latestData.p1_state, roundFinished: false },
+                       p2_state: { ...latestData.p2_state, roundFinished: false }
+                    }).eq('id', 1);
+                 } else {
+                    await supabase.from('multiplayer_state').update({ status: 'game_over' }).eq('id', 1);
+                 }
+              }
+           };
+           goNext();
+        }
+      }
+    }
+    return () => clearTimeout(timer);
+  }, [phase, nextRoundTimer, playMode, currentUser]);
 
   const joinMultiplayer = async () => {
     setPlayMode("multi");
@@ -312,10 +376,10 @@ export default function MemoryGamePage() {
     setPhase("memorize");
   };
 
-  // YENİ: KİM SONUNCU BİTİRİRSE DİĞER TURA O ATLATIR (Sonsuz Bekleme Bug'ı Çözüldü!)
   const finishRound = async () => {
     playSound("success");
     const calculatedScore = calculateStrictScore(targetColor, userColor);
+    setCurrentScore(calculatedScore); 
     
     const newScores = [...scoresRef.current, parseFloat(calculatedScore)];
     setScores(newScores);
@@ -323,7 +387,6 @@ export default function MemoryGamePage() {
     if (playMode === "multi") {
       setPhase("waitingRound");
       const playerField = currentUser === "Emircan" ? "p1_state" : "p2_state";
-      const opponentField = currentUser === "Emircan" ? "p2_state" : "p1_state";
       
       let finalAvg = null;
       if (currentRoundRef.current >= settingsRef.current.rounds) {
@@ -332,59 +395,18 @@ export default function MemoryGamePage() {
         setMyFinalScore(finalAvg);
       }
 
-      const myNewState = { 
-        joined: true, 
-        ready: true, 
-        roundFinished: true, 
-        currentScore: calculatedScore,
-        finalScore: finalAvg
-      };
-
-      try {
-        // Tam o an veritabanındaki "en güncel" veriyi çekiyoruz
-        const { data: latestData } = await supabase.from('multiplayer_state').select('*').eq('id', 1).single();
-        
-        // Eğer karşı taraf ZATEN BİTİRDİYSE (Yani sen sonuncuysan) veritabanında yeni turu SEN başlatırsın
-        if (latestData && latestData[opponentField]?.roundFinished) {
-          if (currentRoundRef.current < settingsRef.current.rounds) {
-             const nextTarget = generateRandomColor();
-             await supabase.from('multiplayer_state').update({
-                [playerField]: myNewState,
-                shared_data: { ...latestData.shared_data, targetColor: nextTarget, round: currentRoundRef.current + 1 },
-                p1_state: { ...(currentUser === "Emircan" ? myNewState : latestData.p1_state), roundFinished: false },
-                p2_state: { ...(currentUser === "Efsun" ? myNewState : latestData.p2_state), roundFinished: false }
-             }).eq('id', 1);
-          } else {
-             // Tur bittiyse oyunu tamamen bitir
-             await supabase.from('multiplayer_state').update({
-                [playerField]: myNewState,
-                status: 'game_over'
-             }).eq('id', 1);
-          }
-        } else {
-          // Eğer İLK SEN BİTİRDİYSEN sadece kendi durumunu güncelle, karşıyı bekle
-          await supabase.from('multiplayer_state').update({ [playerField]: myNewState }).eq('id', 1);
+      await supabase.from('multiplayer_state').update({
+        [playerField]: { 
+          joined: true, 
+          ready: true, 
+          roundFinished: true, 
+          currentScore: calculatedScore,
+          finalScore: finalAvg
         }
-      } catch (error) {
-        console.error("Hata:", error);
-      }
-
+      }).eq('id', 1);
     } else {
-      setPhase("waitingRound");
-      setTimeout(() => {
-        if (currentRoundRef.current < settingsRef.current.rounds) {
-           setCurrentRound(prev => prev + 1);
-           setTargetColor(generateRandomColor());
-           setUserColor({ h: 320, s: 50, l: 50 });
-           setMemorizeTime(4);
-           setPhase("memorize");
-        } else {
-           const total = newScores.reduce((sum, val) => sum + val, 0);
-           setMyFinalScore((total / newScores.length).toFixed(1));
-           playSound("over");
-           setPhase("finalResult");
-        }
-      }, 1000);
+      setPhase("roundResult");
+      setNextRoundTimer(3);
     }
   };
 
@@ -640,7 +662,6 @@ export default function MemoryGamePage() {
 
           {phase === "playing" && (
             <>
-              {/* YENİ: ANDROID İÇİN DONANIMSAL KASMA YAPMAYAN ÖZEL BİLEŞENLER */}
               <div className="absolute top-0 left-0 h-full flex w-40 bg-black/40 backdrop-blur-md border-r border-white/20 py-6 px-3 gap-3 shadow-[10px_0_30px_rgba(0,0,0,0.3)] z-10">
                 <ColorSlider 
                   max={360} value={userColor.h} 
@@ -669,18 +690,48 @@ export default function MemoryGamePage() {
         </div>
       )}
 
-      {/* KÖR TUR BEKLEME EKRANI */}
       {phase === "waitingRound" && (
         <div className="flex-1 flex flex-col items-center justify-center animate-in zoom-in max-w-sm mx-auto w-full">
           <div className="text-6xl mb-6 animate-spin drop-shadow-xl">⏳</div>
-          <h2 className="display-font text-3xl text-primary mb-2 text-center">Harika Seçim!</h2>
+          <h2 className="display-font text-3xl text-primary mb-2 text-center">İşlem Tamam!</h2>
           <p className="text-text/70 uppercase tracking-widest text-sm font-bold animate-pulse text-center">
-             {playMode === "multi" ? `${targetOpponent}'un Seçimi Bekleniyor...` : "Sıradaki Tura Geçiliyor..."}
+             {playMode === "multi" ? `${targetOpponent}'un bitirmesi bekleniyor...` : "Sonuçlara geçiliyor..."}
           </p>
         </div>
       )}
 
-      {/* MUHTEŞEM FİNAL EKRANI */}
+      {/* YENİ: OTOMATİK 3 SANİYELİK SAYAÇLI SONUÇ EKRANI */}
+      {phase === "roundResult" && (
+        <div className="flex-1 flex flex-col items-center justify-center animate-in slide-in-from-bottom-5 w-full">
+          <div className="text-xs uppercase tracking-widest text-primary font-bold mb-4 border border-primary/20 px-4 py-1 rounded-full bg-card shadow-sm">
+            Tur {currentRound} Sonucu
+          </div>
+          
+          <h2 className="display-font text-6xl text-primary mb-1 font-black drop-shadow-sm">%{currentScore}</h2>
+          <p className="text-text/70 mb-4 font-medium tracking-widest uppercase text-xs">Senin Puanın</p>
+
+          {playMode === "multi" && (
+            <div className="mb-8 bg-card border border-primary/20 px-6 py-2 rounded-2xl flex flex-col items-center shadow-lg">
+              <span className="text-[10px] uppercase tracking-widest text-text/50 font-bold mb-1">{targetOpponent}'un Puanı</span>
+              <span className="text-3xl font-black text-primary/80">%{opponentCurrentScore}</span>
+            </div>
+          )}
+
+          <div className="flex w-full max-w-sm rounded-3xl overflow-hidden h-32 shadow-2xl border border-white/10 mb-10 relative">
+            <div className="flex-1 flex items-end p-3" style={{ backgroundColor: `hsl(${targetColor.h}, ${targetColor.s}%, ${targetColor.l}%)` }}>
+              <span className="bg-black/60 text-white text-[10px] font-bold px-2 py-1 rounded-md backdrop-blur-md shadow-sm">Gerçek</span>
+            </div>
+            <div className="flex-1 flex items-end p-3" style={{ backgroundColor: `hsl(${userColor.h}, ${userColor.s}%, ${userColor.l}%)` }}>
+              <span className="bg-black/60 text-white text-[10px] font-bold px-2 py-1 rounded-md backdrop-blur-md shadow-sm">Tahminin</span>
+            </div>
+          </div>
+
+          <div className="w-full max-w-xs p-4 rounded-2xl border border-primary/20 bg-card text-center text-lg font-black uppercase tracking-widest text-primary animate-pulse shadow-lg">
+            {currentRound < settings.rounds ? `Sıradaki Tur: ${nextRoundTimer}` : `Sonuçlar: ${nextRoundTimer}`}
+          </div>
+        </div>
+      )}
+
       {phase === "finalResult" && (
         <div className="flex-1 flex flex-col items-center justify-center animate-in zoom-in max-w-sm mx-auto w-full">
           <div className="text-7xl mb-4 drop-shadow-lg">👑</div>
