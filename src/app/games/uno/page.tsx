@@ -117,7 +117,6 @@ export default function UnoPage() {
           setCurrentColor(data.shared_data?.currentColor || "red");
           setPendingAction(data.shared_data?.pendingAction || "none");
 
-          // YENİ: Akıllı Olay Sistemi (Emoji ve UNO Bildirimi Bug'ını Çözer)
           if (data.shared_data?.lastEvent && data.shared_data.lastEvent.id !== lastEventIdRef.current) {
               lastEventIdRef.current = data.shared_data.lastEvent.id;
               const evt = data.shared_data.lastEvent;
@@ -134,7 +133,6 @@ export default function UnoPage() {
           }
       }
 
-      // YENİ: Kazanma/Kaybetme Bug'ı Çözümü
       if (data.status === 'game_over') {
           setWinner(data.shared_data?.winner || null);
           if (phase !== 'finalResult') {
@@ -160,7 +158,6 @@ export default function UnoPage() {
 
     return () => { supabase.removeChannel(channel); };
   }, [currentUser, phase, myPlayerField, opPlayerField]);
-
 
   const joinLobby = async () => {
     setPhase("settings");
@@ -202,7 +199,7 @@ export default function UnoPage() {
           currentTurn: "Efsun",
           currentColor: firstCard.color,
           pendingAction: "none",
-          lastEvent: null, // Reset events
+          lastEvent: null, 
           winner: null
       },
       p1_state: { joined: true, ready: true, hand: p1Hand, unoSaid: false },
@@ -238,7 +235,6 @@ export default function UnoPage() {
       let drawPile = [...data.shared_data.drawPile];
       let opHand = [...data[opPlayerField].hand];
 
-      // KAZANMA DURUMU KONTROLÜ VE DB GÜNCELLEMESİ
       if (newHand.length === 0) {
           await supabase.from('multiplayer_state').update({
               status: 'game_over',
@@ -384,7 +380,21 @@ export default function UnoPage() {
     setIsSaved(true);
   };
 
-  // YENİ: Sadece görsel render döndüren saf kart fonksiyonu
+  // EKSİK OLAN LOBİDEN ÇIKMA FONKSİYONU
+  const exitLobby = async () => {
+    playSound("click");
+    const { data } = await supabase.from('multiplayer_state').select('*').eq('id', 1).single();
+    if (data) {
+      await supabase.from('multiplayer_state').update({ 
+        status: 'waiting',
+        p1_state: { ...data.p1_state, joined: false, ready: false },
+        p2_state: { ...data.p2_state, joined: false, ready: false }
+      }).eq('id', 1);
+    }
+    setPhase("modeSelect");
+    setIsMeReady(false);
+  };
+
   const renderCardVisual = (card: Card) => {
       const displayVal = card.value === 'skip' ? '🚫' : 
                          card.value === 'reverse' ? '🔄' : 
@@ -405,7 +415,6 @@ export default function UnoPage() {
       );
   };
 
-  // Arka Plan Masa Örtüsü ve Işıklar
   const bgTableColor = phase === "playing" ? "bg-[#0f5132]" : "bg-[#0f172a]";
 
   return (
@@ -451,7 +460,7 @@ export default function UnoPage() {
                 <div className="relative w-full h-full flex justify-center mt-6">
                     {Array.from({ length: opponentHandCount }).map((_, i) => {
                         const offset = i - (opponentHandCount - 1) / 2;
-                        const rotation = offset * -8; // Ters kavis
+                        const rotation = offset * -8; 
                         const translateY = Math.abs(offset) * -3; 
                         const translateX = offset * 25; 
                         
@@ -545,9 +554,9 @@ export default function UnoPage() {
                                            (card.color === 'wild' || card.color === currentColor || card.value === topCard.value);
                         
                         const offset = i - (myHand.length - 1) / 2;
-                        const rotation = offset * 8; // Kavis açısı
-                        const translateY = Math.abs(offset) * 4; // Aşağı doğru kavis
-                        const translateX = offset * 30; // Kartlar arası mesafe
+                        const rotation = offset * 8; 
+                        const translateY = Math.abs(offset) * 4; 
+                        const translateX = offset * 30; 
                         
                         return (
                             <div key={card.id} 
@@ -556,10 +565,9 @@ export default function UnoPage() {
                                  `}
                                  style={{ 
                                      transform: `translateX(${translateX}px) translateY(${translateY}px) rotate(${rotation}deg)`,
-                                     zIndex: isPlayable ? i + 10 : i // Oynanabilen kartlar hover yaparken öne çıksın diye
+                                     zIndex: isPlayable ? i + 10 : i 
                                  }}>
                                 {renderCardVisual(card)}
-                                {/* Görselin üzerine şeffaf buton ekleyerek tıklamayı yönetiyoruz (Transformu bozmamak için) */}
                                 <button 
                                    onClick={() => isPlayable && handlePlayCard(i)} 
                                    className="absolute inset-0 w-full h-full z-20 outline-none" 
