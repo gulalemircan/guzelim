@@ -20,6 +20,44 @@ const generateRandomColor = () => ({
   l: Math.floor(Math.random() * 60) + 20 
 });
 
+// YENİ: ANDROID İÇİN %100 KUSURSUZ, SIFIR KASMA SLIDER BİLEŞENİ (input type="range" çöpe atıldı!)
+const ColorSlider = ({ max, value, bgGradient, onChange }: { max: number, value: number, bgGradient: string, onChange: (val: number) => void }) => {
+  const trackRef = useRef<HTMLDivElement>(null);
+  
+  const updateValue = (clientY: number) => {
+    if (!trackRef.current) return;
+    const rect = trackRef.current.getBoundingClientRect();
+    let percentage = (rect.bottom - clientY) / rect.height;
+    percentage = Math.max(0, Math.min(1, percentage));
+    onChange(Math.round(percentage * max));
+  };
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.currentTarget.setPointerCapture(e.pointerId);
+    updateValue(e.clientY);
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.buttons > 0) updateValue(e.clientY);
+  };
+
+  return (
+    <div 
+      ref={trackRef}
+      className="flex-1 h-full relative rounded-full shadow-inner border border-white/10 touch-none cursor-pointer"
+      style={{ background: bgGradient }}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={() => playSound("memory_dial")}
+    >
+      <div 
+        className="absolute left-1/2 w-8 h-8 bg-white rounded-full border-[3px] border-gray-300 shadow-[0_4px_12px_rgba(0,0,0,0.8)] pointer-events-none z-10 transition-none"
+        style={{ bottom: `calc(${(value / max) * 100}% - 16px)`, transform: 'translateX(-50%)' }}
+      />
+    </div>
+  );
+};
+
 export default function MemoryGamePage() {
   const [currentUser, setCurrentUser] = useState<string>("Emircan");
   const [settings, setSettings] = useState({
@@ -51,7 +89,6 @@ export default function MemoryGamePage() {
   const [isSaved, setIsSaved] = useState(false);
   const [winSaved, setWinSaved] = useState(false);
 
-  // YENİ: KOPMA SORUNUNU ÇÖZEN KALICI BELLEKLER (REFS)
   const phaseRef = useRef(phase);
   const currentRoundRef = useRef(currentRound);
   const settingsRef = useRef(settings);
@@ -112,18 +149,13 @@ export default function MemoryGamePage() {
     }
   }, [phase, isSaved, winSaved, myFinalScore, opponentFinalScore, playMode, currentUser]);
 
-  // YENİ: KUSURSUZ SUPABASE BAĞLANTISI (Artık asla kopmuyor)
   useEffect(() => {
     if (playMode !== "multi") return;
 
     const checkLobbyStatus = (data: any) => {
-      const amIEmircan = currentUser === "Emircan";
-      const myState = amIEmircan ? data.p1_state : data.p2_state;
-      const opState = amIEmircan ? data.p2_state : data.p1_state;
-
+      const opState = currentUser === "Emircan" ? data.p2_state : data.p1_state;
       const currentPhase = phaseRef.current;
       const round = currentRoundRef.current;
-      const currentSettings = settingsRef.current;
 
       if (opState?.ready) setIsOpponentReady(true);
       else setIsOpponentReady(false);
@@ -140,6 +172,7 @@ export default function MemoryGamePage() {
          setIsMeReady(false);
       }
 
+      // YENİ: Otomatik Sonraki Tura Geçiş Senkronizasyonu
       if (data.status === 'playing') {
         if (currentPhase === "settings") {
           setSettings(data.shared_data.settings);
@@ -164,22 +197,6 @@ export default function MemoryGamePage() {
         }
       }
 
-      // KÖR TUR SİSTEMİ: İKİNİZ DE BİTİRDİĞİ AN SONUÇ GÖSTERMEDEN YENİ TURA GEÇER
-      if (data.status === 'playing' && myState?.roundFinished && opState?.roundFinished) {
-         if (amIEmircan && data.shared_data.round === round) {
-            if (round < currentSettings.rounds) {
-               const nextTarget = generateRandomColor();
-               supabase.from('multiplayer_state').update({
-                  shared_data: { ...data.shared_data, targetColor: nextTarget, round: round + 1 },
-                  p1_state: { ...data.p1_state, roundFinished: false },
-                  p2_state: { ...data.p2_state, roundFinished: false }
-               }).eq('id', 1);
-            } else {
-               supabase.from('multiplayer_state').update({ status: 'game_over' }).eq('id', 1);
-            }
-         }
-      }
-
       if (data.status === 'game_over' && currentPhase !== 'finalResult') {
         setPhase('finalResult');
         playSound("over");
@@ -193,7 +210,6 @@ export default function MemoryGamePage() {
 
     fetchInitialLobby();
 
-    // Bu bağlantı maç boyunca hep açık kalacak
     const channel = supabase
       .channel('lobby-channel')
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'multiplayer_state', filter: 'id=eq.1' }, (payload) => {
@@ -202,7 +218,7 @@ export default function MemoryGamePage() {
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [playMode, currentUser]); // Gereksiz tetikleyiciler (phase, round) çıkarıldı, kopma önlendi!
+  }, [playMode, currentUser]); 
 
   const joinMultiplayer = async () => {
     setPlayMode("multi");
@@ -296,6 +312,7 @@ export default function MemoryGamePage() {
     setPhase("memorize");
   };
 
+  // YENİ: KİM SONUNCU BİTİRİRSE DİĞER TURA O ATLATIR (Sonsuz Bekleme Bug'ı Çözüldü!)
   const finishRound = async () => {
     playSound("success");
     const calculatedScore = calculateStrictScore(targetColor, userColor);
@@ -306,6 +323,7 @@ export default function MemoryGamePage() {
     if (playMode === "multi") {
       setPhase("waitingRound");
       const playerField = currentUser === "Emircan" ? "p1_state" : "p2_state";
+      const opponentField = currentUser === "Emircan" ? "p2_state" : "p1_state";
       
       let finalAvg = null;
       if (currentRoundRef.current >= settingsRef.current.rounds) {
@@ -314,15 +332,43 @@ export default function MemoryGamePage() {
         setMyFinalScore(finalAvg);
       }
 
-      await supabase.from('multiplayer_state').update({
-        [playerField]: { 
-          joined: true, 
-          ready: true, 
-          roundFinished: true, 
-          currentScore: calculatedScore,
-          finalScore: finalAvg
+      const myNewState = { 
+        joined: true, 
+        ready: true, 
+        roundFinished: true, 
+        currentScore: calculatedScore,
+        finalScore: finalAvg
+      };
+
+      try {
+        // Tam o an veritabanındaki "en güncel" veriyi çekiyoruz
+        const { data: latestData } = await supabase.from('multiplayer_state').select('*').eq('id', 1).single();
+        
+        // Eğer karşı taraf ZATEN BİTİRDİYSE (Yani sen sonuncuysan) veritabanında yeni turu SEN başlatırsın
+        if (latestData && latestData[opponentField]?.roundFinished) {
+          if (currentRoundRef.current < settingsRef.current.rounds) {
+             const nextTarget = generateRandomColor();
+             await supabase.from('multiplayer_state').update({
+                [playerField]: myNewState,
+                shared_data: { ...latestData.shared_data, targetColor: nextTarget, round: currentRoundRef.current + 1 },
+                p1_state: { ...(currentUser === "Emircan" ? myNewState : latestData.p1_state), roundFinished: false },
+                p2_state: { ...(currentUser === "Efsun" ? myNewState : latestData.p2_state), roundFinished: false }
+             }).eq('id', 1);
+          } else {
+             // Tur bittiyse oyunu tamamen bitir
+             await supabase.from('multiplayer_state').update({
+                [playerField]: myNewState,
+                status: 'game_over'
+             }).eq('id', 1);
+          }
+        } else {
+          // Eğer İLK SEN BİTİRDİYSEN sadece kendi durumunu güncelle, karşıyı bekle
+          await supabase.from('multiplayer_state').update({ [playerField]: myNewState }).eq('id', 1);
         }
-      }).eq('id', 1);
+      } catch (error) {
+        console.error("Hata:", error);
+      }
+
     } else {
       setPhase("waitingRound");
       setTimeout(() => {
@@ -383,36 +429,11 @@ export default function MemoryGamePage() {
 
   return (
     <main className="p-5 animate-in fade-in duration-500 pb-24 min-h-screen flex flex-col">
-      {/* YENİ: SAFARI VE ANDROID UYUMLU, %100 NATIVE (DONANIMSAL) DİKEY SLIDER STİLLERİ */}
       <style dangerouslySetInnerHTML={{__html: `
         .game-active-ui div[class*="fixed"][class*="bottom-"] {
           opacity: 0 !important;
           pointer-events: none !important;
           transition: all 0.3s ease;
-        }
-        .vertical-range {
-          -webkit-appearance: slider-vertical; /* Chrome/Safari/Edge için dikey */
-          appearance: slider-vertical;
-          writing-mode: bt-lr; /* Eski tarayıcılar için */
-          width: 100%;
-          height: 100%;
-          background: transparent; /* Arkadaki muazzam degrade renkleri gösterir */
-          outline: none;
-          margin: 0;
-        }
-        .vertical-range::-webkit-slider-thumb {
-          -webkit-appearance: none;
-          appearance: none;
-          width: 32px;
-          height: 32px;
-          border-radius: 50%;
-          background: white;
-          border: 3px solid #ddd;
-          box-shadow: 0 4px 15px rgba(0,0,0,0.6);
-          cursor: pointer;
-        }
-        .vertical-range::-moz-range-track {
-          background: transparent;
         }
       `}} />
 
@@ -596,7 +617,7 @@ export default function MemoryGamePage() {
 
       {(phase === "memorize" || phase === "playing") && (
         <div 
-          className="flex-1 w-full rounded-3xl overflow-hidden relative shadow-2xl transition-colors duration-200 border border-black/10"
+          className="flex-1 w-full rounded-3xl overflow-hidden relative shadow-2xl transition-colors duration-200 border border-black/10 touch-none"
           style={{ backgroundColor: phase === "memorize" ? `hsl(${targetColor.h}, ${targetColor.s}%, ${targetColor.l}%)` : `hsl(${userColor.h}, ${userColor.s}%, ${userColor.l}%)` }}
         >
           <div className="absolute top-6 left-6 z-10 pointer-events-none">
@@ -619,36 +640,23 @@ export default function MemoryGamePage() {
 
           {phase === "playing" && (
             <>
-              {/* YENİ: ANDROID İÇİN DONANIMSAL, SIFIR KASMA SLIDER YAPISI */}
+              {/* YENİ: ANDROID İÇİN DONANIMSAL KASMA YAPMAYAN ÖZEL BİLEŞENLER */}
               <div className="absolute top-0 left-0 h-full flex w-40 bg-black/40 backdrop-blur-md border-r border-white/20 py-6 px-3 gap-3 shadow-[10px_0_30px_rgba(0,0,0,0.3)] z-10">
-                
-                {/* HUE BAR */}
-                <div className="flex-1 h-full relative rounded-full shadow-inner border border-white/10" style={{ background: `linear-gradient(to top, #ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff, #ff0000)` }}>
-                  <input type="range" min="0" max="360" value={userColor.h} 
-                    onChange={(e) => { setUserColor({...userColor, h: parseInt(e.target.value)}); }}
-                    onPointerUp={() => playSound("memory_dial")}
-                    onTouchEnd={() => playSound("memory_dial")}
-                    className="vertical-range absolute inset-0 z-10" />
-                </div>
-
-                {/* SATURATION BAR */}
-                <div className="flex-1 h-full relative rounded-full shadow-inner border border-white/10" style={{ background: `linear-gradient(to top, hsl(${userColor.h}, 0%, ${userColor.l}%), hsl(${userColor.h}, 100%, ${userColor.l}%))` }}>
-                  <input type="range" min="0" max="100" value={userColor.s} 
-                    onChange={(e) => { setUserColor({...userColor, s: parseInt(e.target.value)}); }}
-                    onPointerUp={() => playSound("memory_dial")}
-                    onTouchEnd={() => playSound("memory_dial")}
-                    className="vertical-range absolute inset-0 z-10" />
-                </div>
-
-                {/* LIGHTNESS BAR */}
-                <div className="flex-1 h-full relative rounded-full shadow-inner border border-white/10" style={{ background: `linear-gradient(to top, #000000, hsl(${userColor.h}, ${userColor.s}%, 50%), #ffffff)` }}>
-                  <input type="range" min="0" max="100" value={userColor.l} 
-                    onChange={(e) => { setUserColor({...userColor, l: parseInt(e.target.value)}); }}
-                    onPointerUp={() => playSound("memory_dial")}
-                    onTouchEnd={() => playSound("memory_dial")}
-                    className="vertical-range absolute inset-0 z-10" />
-                </div>
-
+                <ColorSlider 
+                  max={360} value={userColor.h} 
+                  bgGradient={`linear-gradient(to top, #ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff, #ff0000)`}
+                  onChange={(val) => setUserColor(prev => ({ ...prev, h: val }))} 
+                />
+                <ColorSlider 
+                  max={100} value={userColor.s} 
+                  bgGradient={`linear-gradient(to top, hsl(${userColor.h}, 0%, ${userColor.l}%), hsl(${userColor.h}, 100%, ${userColor.l}%))`}
+                  onChange={(val) => setUserColor(prev => ({ ...prev, s: val }))} 
+                />
+                <ColorSlider 
+                  max={100} value={userColor.l} 
+                  bgGradient={`linear-gradient(to top, #000000, hsl(${userColor.h}, ${userColor.s}%, 50%), #ffffff)`}
+                  onChange={(val) => setUserColor(prev => ({ ...prev, l: val }))} 
+                />
               </div>
 
               <button onClick={finishRound} className="absolute bottom-6 right-6 w-16 h-16 bg-white rounded-full flex items-center justify-center shadow-[0_8px_30px_rgb(0,0,0,0.4)] hover:scale-105 active:scale-95 transition-transform z-20 border-4 border-black/10">
