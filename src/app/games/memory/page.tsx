@@ -21,17 +21,20 @@ const generateRandomColor = () => ({
 });
 
 export default function MemoryGamePage() {
+  const [currentUser, setCurrentUser] = useState<string>("Emircan");
   const [settings, setSettings] = useState({
     rounds: 3,
     mode: "relaxed" as "timed" | "relaxed",
     timeLimit: 10
   });
 
-  // YENİ: modeSelect aşaması eklendi ve başlangıç ekranı yapıldı
-  const [phase, setPhase] = useState<"modeSelect" | "settings" | "memorize" | "playing" | "roundResult" | "finalResult">("modeSelect");
-  
-  // YENİ: Hangi modun seçildiğini tutacak state (İleride çok oyunculu altyapısını buraya bağlayacağız)
+  // YENİ: "waitingRoom" (Lobi) fazı eklendi
+  const [phase, setPhase] = useState<"modeSelect" | "waitingRoom" | "settings" | "memorize" | "playing" | "roundResult" | "finalResult">("modeSelect");
   const [playMode, setPlayMode] = useState<"single" | "multi" | null>(null);
+  
+  // YENİ: Lobi durumlarını tutan stateler
+  const [opponentJoined, setOpponentJoined] = useState(false);
+  const targetOpponent = currentUser === "Emircan" ? "Efsun" : "Emircan";
 
   const [currentRound, setCurrentRound] = useState(1);
   const [scores, setScores] = useState<number[]>([]);
@@ -54,8 +57,51 @@ export default function MemoryGamePage() {
   };
 
   useEffect(() => {
+    const savedName = localStorage.getItem("myName");
+    if (savedName) setCurrentUser(savedName);
     fetchLeaderboard();
   }, []);
+
+  // YENİ: Lobi ve Çok Oyunculu Eşleşme Dinleyicisi (Supabase Realtime)
+  useEffect(() => {
+    if (playMode !== "multi") return;
+
+    const checkLobbyStatus = (data: any) => {
+      const amIEmircan = currentUser === "Emircan";
+      const myState = amIEmircan ? data.p1_state : data.p2_state;
+      const opponentState = amIEmircan ? data.p2_state : data.p1_state;
+
+      // Karşı taraf katılmış mı?
+      if (opponentState && opponentState.joined) {
+        setOpponentJoined(true);
+        // İkimiz de masadaysak ve ben lobi ekranındaysam maça (ayarlara) geçiş yap
+        if (myState && myState.joined) {
+          setTimeout(() => {
+            setPhase((prevPhase) => prevPhase === "waitingRoom" ? "settings" : prevPhase);
+            playSound("success");
+          }, 1500); // Rakip bulununca 1.5 saniye animasyon izletip maça atar
+        }
+      } else {
+        setOpponentJoined(false);
+      }
+    };
+
+    const fetchInitialLobby = async () => {
+      const { data } = await supabase.from('multiplayer_state').select('*').eq('id', 1).single();
+      if (data) checkLobbyStatus(data);
+    };
+
+    fetchInitialLobby();
+
+    const channel = supabase
+      .channel('lobby-channel')
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'multiplayer_state', filter: 'id=eq.1' }, (payload) => {
+        checkLobbyStatus(payload.new);
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [playMode, currentUser]);
 
   const fetchLeaderboard = async () => {
     const { data } = await supabase.from('game_scores').select('*').eq('game_name', 'memory');
@@ -79,6 +125,30 @@ export default function MemoryGamePage() {
     }]);
     setIsSaved(true);
     fetchLeaderboard();
+  };
+
+  // YENİ: Masaya (Lobiye) Katılma Fonksiyonu
+  const joinMultiplayer = async () => {
+    setPlayMode("multi");
+    setPhase("waitingRoom");
+    playSound("click");
+
+    const playerField = currentUser === "Emircan" ? "p1_state" : "p2_state";
+    await supabase.from('multiplayer_state').update({
+      [playerField]: { joined: true }
+    }).eq('id', 1);
+  };
+
+  // YENİ: Masadan (Lobiden) Çıkma Fonksiyonu
+  const leaveMultiplayer = async () => {
+    playSound("click");
+    const playerField = currentUser === "Emircan" ? "p1_state" : "p2_state";
+    await supabase.from('multiplayer_state').update({
+      [playerField]: { joined: false }
+    }).eq('id', 1);
+    
+    setPhase("modeSelect");
+    setPlayMode(null);
   };
 
   useEffect(() => {
@@ -145,6 +215,18 @@ export default function MemoryGamePage() {
     }
   };
 
+  // Uygulama kapandığında lobiden düşürmek için
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (playMode === "multi") {
+         const playerField = currentUser === "Emircan" ? "p1_state" : "p2_state";
+         supabase.from('multiplayer_state').update({ [playerField]: { joined: false } }).eq('id', 1).then();
+      }
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [playMode, currentUser]);
+
   return (
     <main className="p-5 animate-in fade-in duration-500 pb-24 min-h-screen flex flex-col">
       <style dangerouslySetInnerHTML={{__html: `
@@ -155,13 +237,14 @@ export default function MemoryGamePage() {
         }
       `}} />
 
-      <div className="flex items-center mb-4">
-        <Link href="/games" onClick={() => playSound("click")} className="bg-card px-3 py-1.5 rounded-lg border border-primary/20 text-primary hover:bg-primary hover:text-background transition-all flex items-center gap-2 text-xs font-bold shadow-sm">
-          <span>←</span> Oyunlar
-        </Link>
-      </div>
+      {phase !== "waitingRoom" && (
+        <div className="flex items-center mb-4">
+          <Link href="/games" onClick={() => playSound("click")} className="bg-card px-3 py-1.5 rounded-lg border border-primary/20 text-primary hover:bg-primary hover:text-background transition-all flex items-center gap-2 text-xs font-bold shadow-sm">
+            <span>←</span> Oyunlar
+          </Link>
+        </div>
+      )}
 
-      {/* YENİ: OYUN MODU SEÇİM EKRANI */}
       {phase === "modeSelect" && (
         <div className="flex-1 flex flex-col items-center justify-center gap-8 animate-in slide-in-from-bottom-5 max-w-md mx-auto w-full">
           <div className="text-center mb-2">
@@ -181,16 +264,57 @@ export default function MemoryGamePage() {
             </button>
 
             <button 
-              onClick={() => { setPlayMode("multi"); setPhase("settings"); playSound("click"); }}
-              className="w-full bg-primary text-background p-6 rounded-[32px] shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all flex flex-col items-center gap-3 group border-2 border-transparent"
+              onClick={joinMultiplayer}
+              className="w-full bg-primary text-background p-6 rounded-[32px] shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all flex flex-col items-center gap-3 group border-2 border-transparent relative overflow-hidden"
             >
-              <span className="text-4xl group-hover:scale-110 transition-transform duration-300">👥</span>
-              <span className="font-black tracking-widest uppercase text-lg">Çok Oyunculu</span>
-              <span className="bg-background/20 text-background px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest mt-1">
-                Aynı Anda Kapış (Hazırlanıyor)
+              <span className="text-4xl group-hover:scale-110 transition-transform duration-300 relative z-10">👥</span>
+              <span className="font-black tracking-widest uppercase text-lg relative z-10">Çok Oyunculu</span>
+              <span className="bg-background/20 text-background px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest mt-1 relative z-10">
+                Aynı Anda Kapış
               </span>
             </button>
           </div>
+        </div>
+      )}
+
+      {/* YENİ: BEKLEME LOBİSİ (Ortak Masa) */}
+      {phase === "waitingRoom" && (
+        <div className="flex-1 flex flex-col items-center justify-center animate-in zoom-in max-w-md mx-auto w-full text-center">
+          
+          {!opponentJoined ? (
+            <div className="flex flex-col items-center gap-6">
+              <div className="relative flex items-center justify-center w-32 h-32">
+                <div className="absolute w-full h-full border-4 border-primary/30 rounded-full animate-ping"></div>
+                <div className="absolute w-24 h-24 bg-primary/20 rounded-full animate-pulse"></div>
+                <span className="text-5xl z-10 drop-shadow-xl">📡</span>
+              </div>
+              <div>
+                <h2 className="display-font text-3xl text-primary font-black mb-2">Oda Kuruldu</h2>
+                <p className="text-text/70 text-sm font-bold tracking-widest uppercase animate-pulse">
+                  {targetOpponent} Bekleniyor...
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center gap-6 animate-in slide-in-from-bottom-5">
+              <div className="text-6xl drop-shadow-2xl animate-bounce">⚔️</div>
+              <div>
+                <h2 className="display-font text-4xl text-primary font-black mb-2 text-green-500">Rakip Bulundu!</h2>
+                <p className="text-text/70 text-sm font-bold tracking-widest uppercase">
+                  Oyun Ayarlarına Geçiliyor...
+                </p>
+              </div>
+            </div>
+          )}
+
+          {!opponentJoined && (
+            <button 
+              onClick={leaveMultiplayer}
+              className="mt-12 text-[10px] bg-red-500/10 text-red-500 border border-red-500/30 px-6 py-2 rounded-full font-bold hover:bg-red-500 hover:text-white transition-colors tracking-widest uppercase shadow-sm"
+            >
+              Odadan Çık
+            </button>
+          )}
         </div>
       )}
 
@@ -398,9 +522,15 @@ export default function MemoryGamePage() {
           )}
 
           <div className="flex flex-col gap-3 w-full">
-            {/* YENİ: Yeniden Oyna Butonu artık doğrudan mod seçim ekranına (modeSelect) gönderiyor */}
-            <button onClick={() => { setPhase("modeSelect"); playSound("click"); }} className="w-full bg-card border border-primary/20 text-primary p-4 rounded-2xl shadow-sm hover:border-primary/50 transition-all font-bold text-lg">
-              🔄 Yeniden Oyna
+            <button 
+              onClick={() => { 
+                setPhase("modeSelect"); 
+                setPlayMode(null); 
+                playSound("click"); 
+              }} 
+              className="w-full bg-card border border-primary/20 text-primary p-4 rounded-2xl shadow-sm hover:border-primary/50 transition-all font-bold text-lg"
+            >
+              🔄 Ana Menüye Dön
             </button>
             
             <Link href="/games" onClick={() => playSound("click")} className="w-full bg-card border border-primary/20 text-text/80 p-4 rounded-2xl shadow-sm hover:border-primary/50 transition-all font-bold text-lg text-center flex items-center justify-center gap-2">
