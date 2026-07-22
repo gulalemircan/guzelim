@@ -12,7 +12,7 @@ const GAMES = [
     id: "taboo", 
     name: "Tabu", 
     icon: "🗣️", 
-    desc: "Yasaklı kelimeleri kullanmadan anlat bakalım!" 
+    desc: "Yasaklı kelimeleri kullanmadan Efsun'a anlat bakalım!" 
   },
   { 
     id: "wordle", 
@@ -31,6 +31,12 @@ const GAMES = [
     name: "Ben Kimim?", 
     icon: "🎭", 
     desc: "Yüz yüze oynamalık, bol kahkahalı dijital tahmin oyunu!" 
+  },
+  { 
+    id: "uno", 
+    name: "Uno", 
+    icon: "🃏", 
+    desc: "Özel 2 kişilik kurallarla, kavga garantili kart düellosu!" 
   }
 ];
 
@@ -56,7 +62,7 @@ export default function GamesPage() {
           <h2 className="display-font text-4xl text-primary tracking-wide">Oyun Odası</h2>
         </div>
 
-        {/* KART SİSTEMİ (Artık 5 oyunumuz var!) */}
+        {/* KART SİSTEMİ (Artık 6 oyunumuz var!) */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full">
           {GAMES.map((game) => (
             <Link 
@@ -64,7 +70,7 @@ export default function GamesPage() {
               key={game.id}
               className="bg-card rounded-[32px] p-8 border border-primary/20 shadow-xl hover:border-primary/50 hover:scale-[1.02] hover:shadow-2xl transition-all duration-300 ease-out flex items-center gap-6 group will-change-transform"
             >
-              {/* İkon Kutusu - Daha Büyük */}
+              {/* İkon Kutusu */}
               <div className="w-20 h-20 rounded-[20px] bg-primary/10 border border-primary/20 flex items-center justify-center text-4xl shrink-0 group-hover:bg-primary group-hover:text-background transition-all duration-300">
                 {game.icon}
               </div>
