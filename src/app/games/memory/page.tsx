@@ -28,11 +28,10 @@ export default function MemoryGamePage() {
     timeLimit: 10
   });
 
-  const [phase, setPhase] = useState<"modeSelect" | "waitingRoom" | "settings" | "memorize" | "playing" | "roundResult" | "finalResult">("modeSelect");
+  // YENİ: waitingRound eklendi (Senin veya Efsun'un karşı tarafı beklediği aşama)
+  const [phase, setPhase] = useState<"modeSelect" | "settings" | "memorize" | "playing" | "waitingRound" | "roundResult" | "finalResult">("modeSelect");
   const [playMode, setPlayMode] = useState<"single" | "multi" | null>(null);
   
-  // YENİ: Lobi ve Hazır Olma Mantığı Stateleri
-  const [opponentJoined, setOpponentJoined] = useState(false);
   const [isOpponentReady, setIsOpponentReady] = useState(false);
   const [isMeReady, setIsMeReady] = useState(false);
   const targetOpponent = currentUser === "Emircan" ? "Efsun" : "Emircan";
@@ -46,9 +45,9 @@ export default function MemoryGamePage() {
   const [timeLeft, setTimeLeft] = useState(10);
   const [memorizeTime, setMemorizeTime] = useState(3);
   const [currentScore, setCurrentScore] = useState("0");
+  const [opponentCurrentScore, setOpponentCurrentScore] = useState("0");
 
   const [leaderboard, setLeaderboard] = useState({ emircan: 0, efsun: 0 });
-  const [selectedPlayer, setSelectedPlayer] = useState<"Emircan" | "Efsun" | null>(null);
   const [isSaved, setIsSaved] = useState(false);
 
   const getAverageScore = () => {
@@ -63,52 +62,81 @@ export default function MemoryGamePage() {
     fetchLeaderboard();
   }, []);
 
-  // YENİ: Çok Oyunculu Realtime Senkronizasyon (Senin tasarladığın lobi mantığı)
+  // YENİ: Oyun başladığında Chat ve Müzik butonlarını gizleyen sistem
+  useEffect(() => {
+    if (phase !== "modeSelect" && phase !== "settings" && phase !== "finalResult") {
+      document.body.classList.add("game-active-ui");
+    } else {
+      document.body.classList.remove("game-active-ui");
+    }
+    return () => document.body.classList.remove("game-active-ui");
+  }, [phase]);
+
+  // YENİ: Otomatik Skor Kaydetme Sistemi
+  useEffect(() => {
+    if (phase === "finalResult" && !isSaved && scores.length > 0) {
+      const finalAvg = getAverageScore();
+      supabase.from('game_scores').insert([{
+        game_name: 'memory',
+        player_name: currentUser,
+        score: parseFloat(finalAvg)
+      }]).then(() => {
+        setIsSaved(true);
+        fetchLeaderboard();
+      });
+    }
+  }, [phase, isSaved, scores, currentUser]);
+
+  // YENİ: Profesyonel Çok Oyunculu Senkronizasyon (Senin tasarladığın sistem)
   useEffect(() => {
     if (playMode !== "multi") return;
 
     const checkLobbyStatus = (data: any) => {
       const amIEmircan = currentUser === "Emircan";
       const myState = amIEmircan ? data.p1_state : data.p2_state;
-      const opponentState = amIEmircan ? data.p2_state : data.p1_state;
+      const opState = amIEmircan ? data.p2_state : data.p1_state;
 
-      // Rakip Odaya Katıldı Mı?
-      if (opponentState && opponentState.joined) {
-        setOpponentJoined(true);
-        if (myState && myState.joined && data.status === 'waiting' && phase === "waitingRoom") {
-          setTimeout(() => {
-            setPhase("settings");
-            playSound("success");
-          }, 1500); 
+      // Lobi Hazır Durumu
+      if (opState?.ready) setIsOpponentReady(true);
+      else setIsOpponentReady(false);
+
+      if (opState?.currentScore) setOpponentCurrentScore(opState.currentScore);
+
+      // 1. OYUN VEYA YENİ TUR BAŞLADIĞINDA
+      if (data.status === 'playing') {
+        if (phase === "settings") {
+          // Sıfırdan Başlangıç
+          setSettings(data.shared_data.settings);
+          setCurrentRound(1);
+          setScores([]); 
+          setTargetColor(data.shared_data.targetColor);
+          setUserColor({ h: 320, s: 50, l: 50 });
+          setMemorizeTime(4);
+          setPhase("memorize");
+          playSound("start");
+        } 
+        else if (data.shared_data?.round > currentRound) {
+          // Sonraki Tura Geçiş
+          setCurrentRound(data.shared_data.round);
+          setTargetColor(data.shared_data.targetColor);
+          setUserColor({ h: 320, s: 50, l: 50 });
+          setMemorizeTime(4);
+          setPhase("memorize");
         }
-      } else {
-        setOpponentJoined(false);
-        setIsOpponentReady(false);
       }
 
-      // Rakip "Hazır" Butonuna Bastı Mı?
-      if (opponentState && opponentState.ready) {
-         setIsOpponentReady(true);
-      } else {
-         setIsOpponentReady(false);
+      // 2. İKİNİZ DE TURU BİTİRDİĞİNDE (Karşılıklı Bekleme Mantığı)
+      if (data.status === 'playing' && myState?.roundFinished && opState?.roundFinished) {
+        if (phase !== 'roundResult' && phase !== 'finalResult') {
+          setPhase('roundResult');
+          playSound("success");
+        }
       }
 
-      // Emircan Oyunu Başlattı Mı? (İki ekranı aynı anda oyuna atar)
-      if (data.status === 'playing' && phase === "settings") {
-         if (data.shared_data && data.shared_data.settings) {
-            setSettings(data.shared_data.settings);
-         }
-         if (data.shared_data && data.shared_data.targetColor) {
-            setTargetColor(data.shared_data.targetColor); // İkinize de AYNI rengi verir
-         }
-         setCurrentRound(1);
-         setScores([]);
-         setSelectedPlayer(null);
-         setIsSaved(false);
-         setUserColor({ h: 320, s: 50, l: 50 }); 
-         setMemorizeTime(4); 
-         setPhase("memorize");
-         playSound("start");
+      // 3. OYUN BİTTİĞİNDE
+      if (data.status === 'game_over' && phase !== 'finalResult') {
+        setPhase('finalResult');
+        playSound("over");
       }
     };
 
@@ -127,7 +155,7 @@ export default function MemoryGamePage() {
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [playMode, currentUser, phase]);
+  }, [playMode, currentUser, phase, currentRound]);
 
   const fetchLeaderboard = async () => {
     const { data } = await supabase.from('game_scores').select('*').eq('game_name', 'memory');
@@ -141,44 +169,47 @@ export default function MemoryGamePage() {
     }
   };
 
-  const saveScoreToDatabase = async () => {
-    if (!selectedPlayer || isSaved) return;
-    playSound("success");
-    await supabase.from('game_scores').insert([{
-      game_name: 'memory',
-      player_name: selectedPlayer,
-      score: parseFloat(getAverageScore())
-    }]);
-    setIsSaved(true);
-    fetchLeaderboard();
-  };
-
+  // Doğrudan Lobiye (Ayarlara) Geçiş
   const joinMultiplayer = async () => {
     setPlayMode("multi");
-    setPhase("waitingRoom");
+    setPhase("settings");
     setIsMeReady(false);
     playSound("click");
 
     const playerField = currentUser === "Emircan" ? "p1_state" : "p2_state";
-    await supabase.from('multiplayer_state').update({
-      [playerField]: { joined: true, ready: false },
-      status: 'waiting'
-    }).eq('id', 1);
+    const updateData: any = { [playerField]: { joined: true, ready: false, roundFinished: false } };
+    if (currentUser === "Emircan") updateData.status = 'waiting';
+    await supabase.from('multiplayer_state').update(updateData).eq('id', 1);
   };
 
-  const leaveMultiplayer = async () => {
+  const returnToMenu = async () => {
     playSound("click");
-    const playerField = currentUser === "Emircan" ? "p1_state" : "p2_state";
-    await supabase.from('multiplayer_state').update({
-      [playerField]: { joined: false, ready: false }
-    }).eq('id', 1);
-    
+    if (playMode === "multi") {
+      const playerField = currentUser === "Emircan" ? "p1_state" : "p2_state";
+      await supabase.from('multiplayer_state').update({ [playerField]: { joined: false, ready: false } }).eq('id', 1);
+    }
     setPhase("modeSelect");
     setPlayMode(null);
     setIsMeReady(false);
+    setScores([]);
+    setIsSaved(false);
   };
 
-  // YENİ: Efsun İçin Hazır Olma Fonksiyonu
+  const returnToLobby = async () => {
+    playSound("click");
+    setPhase("settings");
+    setIsMeReady(false);
+    setScores([]);
+    setIsSaved(false);
+    
+    if (playMode === "multi") {
+      const playerField = currentUser === "Emircan" ? "p1_state" : "p2_state";
+      const updateData: any = { [playerField]: { joined: true, ready: false, roundFinished: false } };
+      if (currentUser === "Emircan") updateData.status = 'waiting';
+      await supabase.from('multiplayer_state').update(updateData).eq('id', 1);
+    }
+  };
+
   const toggleReady = async () => {
     playSound("click");
     const newReadyState = !isMeReady;
@@ -186,31 +217,25 @@ export default function MemoryGamePage() {
     
     const playerField = currentUser === "Emircan" ? "p1_state" : "p2_state";
     await supabase.from('multiplayer_state').update({
-      [playerField]: { joined: true, ready: newReadyState }
+      [playerField]: { joined: true, ready: newReadyState, roundFinished: false }
     }).eq('id', 1);
   };
 
-  // YENİ: Emircan İçin Oyunu (Herkesi) Başlatma Fonksiyonu
   const startMultiplayerGame = async () => {
     playSound("click");
-    const initialColor = generateRandomColor(); // İkiniz için de geçerli olacak o ilk renk
-    
+    const initialColor = generateRandomColor(); 
     await supabase.from('multiplayer_state').update({
       status: 'playing',
-      shared_data: { 
-        settings: settings,
-        targetColor: initialColor,
-        currentRound: 1
-      }
+      shared_data: { settings: settings, targetColor: initialColor, round: 1 },
+      p1_state: { joined: true, ready: true, roundFinished: false, currentScore: "0" },
+      p2_state: { joined: true, ready: true, roundFinished: false, currentScore: "0" }
     }).eq('id', 1);
   };
 
-  // TEK OYUNCULU İÇİN KLASİK BAŞLANGIÇ
   const startSinglePlayerGame = () => {
     playSound("click");
     setCurrentRound(1);
     setScores([]);
-    setSelectedPlayer(null);
     setIsSaved(false);
     
     setTargetColor(generateRandomColor());
@@ -219,37 +244,46 @@ export default function MemoryGamePage() {
     setPhase("memorize");
   };
 
-  const finishRound = () => {
+  const finishRound = async () => {
     playSound("success");
     const calculatedScore = calculateStrictScore(targetColor, userColor);
     setCurrentScore(calculatedScore);
     setScores(prev => [...prev, parseFloat(calculatedScore)]);
-    setPhase("roundResult");
+    
+    if (playMode === "multi") {
+      setPhase("waitingRound");
+      const playerField = currentUser === "Emircan" ? "p1_state" : "p2_state";
+      await supabase.from('multiplayer_state').update({
+        [playerField]: { joined: true, ready: true, roundFinished: true, currentScore: calculatedScore }
+      }).eq('id', 1);
+    } else {
+      setPhase("roundResult");
+    }
   };
 
-  const handleNext = () => {
+  const handleNext = async () => {
     playSound("click");
     if (currentRound < settings.rounds) {
-      setCurrentRound(prev => prev + 1);
-      
-      if (playMode === "multi") {
-         // Not: İleride raund senkronizasyonu için burası da Realtime üzerinden tetiklenebilir
-         // Şimdilik yerel devam ediyor
-         setTargetColor(generateRandomColor());
-      } else {
-         setTargetColor(generateRandomColor());
-      }
-
-      setUserColor({ h: 320, s: 50, l: 50 }); 
-      setMemorizeTime(4); 
-      setPhase("memorize");
-    } else {
-      playSound("over");
-      setPhase("finalResult");
-      
-      // Maç bitince lobiyi sıfırla
       if (playMode === "multi" && currentUser === "Emircan") {
-         supabase.from('multiplayer_state').update({ status: 'waiting' }).eq('id', 1);
+         const nextTarget = generateRandomColor();
+         await supabase.from('multiplayer_state').update({
+            shared_data: { settings, targetColor: nextTarget, round: currentRound + 1 },
+            p1_state: { joined: true, ready: true, roundFinished: false, currentScore: "0" },
+            p2_state: { joined: true, ready: true, roundFinished: false, currentScore: "0" }
+         }).eq('id', 1);
+      } else if (playMode === "single") {
+         setCurrentRound(prev => prev + 1);
+         setTargetColor(generateRandomColor());
+         setUserColor({ h: 320, s: 50, l: 50 });
+         setMemorizeTime(4);
+         setPhase("memorize");
+      }
+    } else {
+      if (playMode === "multi" && currentUser === "Emircan") {
+         await supabase.from('multiplayer_state').update({ status: 'game_over' }).eq('id', 1);
+      } else if (playMode === "single") {
+         playSound("over");
+         setPhase("finalResult");
       }
     }
   };
@@ -295,21 +329,31 @@ export default function MemoryGamePage() {
 
   return (
     <main className="p-5 animate-in fade-in duration-500 pb-24 min-h-screen flex flex-col">
+      {/* YENİ: CSS Düzenlemeleri (Mobil kayma sorunu çözüldü ve Chat/Müzik gizlendi) */}
       <style dangerouslySetInnerHTML={{__html: `
-        .dialed-slider { -webkit-appearance: none; appearance: none; background: transparent; outline: none; margin: 0; }
+        .dialed-slider { 
+          -webkit-appearance: none; appearance: none; background: transparent; outline: none; margin: 0; 
+          touch-action: none; /* Mobilde kaydırmayı tamamen durdurur! */
+        }
         .dialed-slider::-webkit-slider-thumb {
           -webkit-appearance: none; appearance: none; width: 28px; height: 28px; border-radius: 50%;
           background: white; box-shadow: 0 2px 10px rgba(0,0,0,0.4); cursor: pointer; border: 2px solid #ccc;
         }
+        /* Oyun aktifken ekrandaki sabit sohbet/müzik butonlarını gizler */
+        .game-active-ui div[class*="fixed"][class*="bottom-"] {
+          opacity: 0 !important;
+          pointer-events: none !important;
+          transition: all 0.3s ease;
+        }
       `}} />
 
-      {phase !== "waitingRoom" && phase !== "memorize" && phase !== "playing" && phase !== "roundResult" && (
+      {phase === "modeSelect" || phase === "settings" || phase === "finalResult" ? (
         <div className="flex items-center mb-4">
           <Link href="/games" onClick={() => playSound("click")} className="bg-card px-3 py-1.5 rounded-lg border border-primary/20 text-primary hover:bg-primary hover:text-background transition-all flex items-center gap-2 text-xs font-bold shadow-sm">
             <span>←</span> Oyunlar
           </Link>
         </div>
-      )}
+      ) : null}
 
       {phase === "modeSelect" && (
         <div className="flex-1 flex flex-col items-center justify-center gap-8 animate-in slide-in-from-bottom-5 max-w-md mx-auto w-full">
@@ -343,46 +387,6 @@ export default function MemoryGamePage() {
         </div>
       )}
 
-      {phase === "waitingRoom" && (
-        <div className="flex-1 flex flex-col items-center justify-center animate-in zoom-in max-w-md mx-auto w-full text-center">
-          
-          {!opponentJoined ? (
-            <div className="flex flex-col items-center gap-6">
-              <div className="relative flex items-center justify-center w-32 h-32">
-                <div className="absolute w-full h-full border-4 border-primary/30 rounded-full animate-ping"></div>
-                <div className="absolute w-24 h-24 bg-primary/20 rounded-full animate-pulse"></div>
-                <span className="text-5xl z-10 drop-shadow-xl">📡</span>
-              </div>
-              <div>
-                <h2 className="display-font text-3xl text-primary font-black mb-2">Oda Kuruldu</h2>
-                <p className="text-text/70 text-sm font-bold tracking-widest uppercase animate-pulse">
-                  {targetOpponent} Bekleniyor...
-                </p>
-              </div>
-            </div>
-          ) : (
-            <div className="flex flex-col items-center gap-6 animate-in slide-in-from-bottom-5">
-              <div className="text-6xl drop-shadow-2xl animate-bounce">⚔️</div>
-              <div>
-                <h2 className="display-font text-4xl text-primary font-black mb-2 text-green-500">Rakip Bulundu!</h2>
-                <p className="text-text/70 text-sm font-bold tracking-widest uppercase">
-                  Oyun Ayarlarına Geçiliyor...
-                </p>
-              </div>
-            </div>
-          )}
-
-          {!opponentJoined && (
-            <button 
-              onClick={leaveMultiplayer}
-              className="mt-12 text-[10px] bg-red-500/10 text-red-500 border border-red-500/30 px-6 py-2 rounded-full font-bold hover:bg-red-500 hover:text-white transition-colors tracking-widest uppercase shadow-sm"
-            >
-              Odadan Çık
-            </button>
-          )}
-        </div>
-      )}
-
       {phase === "settings" && (
         <div className="flex-1 flex flex-col gap-6 animate-in slide-in-from-right-5 max-w-md mx-auto w-full">
           
@@ -408,7 +412,6 @@ export default function MemoryGamePage() {
             </div>
           </div>
           
-          {/* YENİ: EFSUN SADECE HAZIR BUTONUNU GÖRÜR */}
           {playMode === "multi" && currentUser === "Efsun" ? (
             <div className="bg-card border border-primary/20 rounded-3xl p-8 shadow-xl flex flex-col items-center gap-6 mt-4">
               <div className="text-center">
@@ -437,7 +440,6 @@ export default function MemoryGamePage() {
               )}
             </div>
           ) : (
-            // EMİRCAN VEYA TEK OYUNCULU İÇİN AYARLAR MENÜSÜ
             <div className="bg-card border border-primary/20 rounded-3xl p-6 shadow-xl flex flex-col gap-6">
               <div>
                 <label className="text-xs uppercase tracking-widest text-primary font-bold mb-3 block">Kaç Tur Oynanacak?</label>
@@ -491,7 +493,6 @@ export default function MemoryGamePage() {
             </div>
           )}
 
-          {/* EMİRCAN İÇİN BAŞLAT BUTONU MANTIĞI */}
           {playMode === "multi" && currentUser === "Emircan" ? (
             <button 
               onClick={startMultiplayerGame}
@@ -514,7 +515,7 @@ export default function MemoryGamePage() {
           )}
 
           {playMode === "multi" && (
-             <button onClick={leaveMultiplayer} className="text-[10px] text-red-500 uppercase tracking-widest font-bold mt-2 hover:underline text-center w-full">
+             <button onClick={returnToMenu} className="text-[10px] text-red-500 uppercase tracking-widest font-bold mt-2 hover:underline text-center w-full">
                Odadan Çık
              </button>
           )}
@@ -577,26 +578,52 @@ export default function MemoryGamePage() {
         </div>
       )}
 
+      {/* YENİ: DİĞER OYUNCUNUN BİTİRMESİNİ BEKLEME EKRANI */}
+      {phase === "waitingRound" && (
+        <div className="flex-1 flex flex-col items-center justify-center animate-in zoom-in max-w-sm mx-auto w-full">
+          <div className="text-6xl mb-6 animate-spin drop-shadow-xl">⏳</div>
+          <h2 className="display-font text-3xl text-primary mb-2 text-center">Sonuç Hesaplanıyor...</h2>
+          <p className="text-text/70 uppercase tracking-widest text-sm font-bold animate-pulse text-center">
+             {targetOpponent}'un Seçimi Bekleniyor
+          </p>
+        </div>
+      )}
+
       {phase === "roundResult" && (
-        <div className="flex-1 flex flex-col items-center justify-center animate-in slide-in-from-bottom-5">
+        <div className="flex-1 flex flex-col items-center justify-center animate-in slide-in-from-bottom-5 w-full">
           <div className="text-xs uppercase tracking-widest text-primary font-bold mb-4 border border-primary/20 px-4 py-1 rounded-full bg-card shadow-sm">
             Tur {currentRound} Sonucu
           </div>
-          <h2 className="display-font text-6xl text-primary mb-2 font-black drop-shadow-sm">%{currentScore}</h2>
-          <p className="text-text/70 mb-10 font-medium tracking-widest uppercase text-sm">Benzerlik</p>
+          
+          <h2 className="display-font text-6xl text-primary mb-1 font-black drop-shadow-sm">%{currentScore}</h2>
+          <p className="text-text/70 mb-4 font-medium tracking-widest uppercase text-xs">Senin Puanın</p>
 
-          <div className="flex w-full max-w-sm rounded-3xl overflow-hidden h-40 shadow-2xl border border-white/10 mb-10 relative">
+          {/* YENİ: RAKİBİN ANLIK PUANINI DA GÖRME */}
+          {playMode === "multi" && (
+            <div className="mb-8 bg-card border border-primary/20 px-6 py-2 rounded-2xl flex flex-col items-center shadow-lg">
+              <span className="text-[10px] uppercase tracking-widest text-text/50 font-bold mb-1">{targetOpponent}'un Puanı</span>
+              <span className="text-3xl font-black text-primary/80">%{opponentCurrentScore}</span>
+            </div>
+          )}
+
+          <div className="flex w-full max-w-sm rounded-3xl overflow-hidden h-32 shadow-2xl border border-white/10 mb-10 relative">
             <div className="flex-1 flex items-end p-3" style={{ backgroundColor: `hsl(${targetColor.h}, ${targetColor.s}%, ${targetColor.l}%)` }}>
-              <span className="bg-black/60 text-white text-[10px] font-bold px-2 py-1 rounded-md backdrop-blur-md shadow-sm">Gerçek Renk</span>
+              <span className="bg-black/60 text-white text-[10px] font-bold px-2 py-1 rounded-md backdrop-blur-md shadow-sm">Gerçek</span>
             </div>
             <div className="flex-1 flex items-end p-3" style={{ backgroundColor: `hsl(${userColor.h}, ${userColor.s}%, ${userColor.l}%)` }}>
               <span className="bg-black/60 text-white text-[10px] font-bold px-2 py-1 rounded-md backdrop-blur-md shadow-sm">Tahminin</span>
             </div>
           </div>
 
-          <button onClick={handleNext} className="w-full max-w-xs bg-primary text-background p-4 rounded-2xl shadow-xl hover:scale-[1.02] transition-transform font-bold text-lg">
-            {currentRound < settings.rounds ? "Sonraki Tur ➡️" : "Sonuçları Gör 🏆"}
-          </button>
+          {playMode === "single" || currentUser === "Emircan" ? (
+            <button onClick={handleNext} className="w-full max-w-xs bg-primary text-background p-4 rounded-2xl shadow-xl hover:scale-[1.02] transition-transform font-bold text-lg">
+              {currentRound < settings.rounds ? "Sonraki Tur ➡️" : "Sonuçları Gör 🏆"}
+            </button>
+          ) : (
+            <div className="w-full max-w-xs p-4 rounded-2xl border border-primary/20 bg-card text-center text-xs font-bold uppercase tracking-widest text-primary/70 animate-pulse">
+              Emircan'ın Sonraki Tura Geçmesi Bekleniyor...
+            </div>
+          )}
         </div>
       )}
 
@@ -605,61 +632,33 @@ export default function MemoryGamePage() {
           <div className="text-7xl mb-4 drop-shadow-lg">👑</div>
           <h2 className="display-font text-4xl text-primary mb-2 text-center font-black">Maç Bitti!</h2>
           <p className="text-text/70 mb-6 text-center text-sm px-4 font-medium">
-            Toplam {settings.rounds} tur oynadınız. Genel isabet oranınız:
+            Toplam {settings.rounds} tur oynadınız.
           </p>
 
-          <div className="bg-card border border-primary/30 w-full p-8 rounded-[32px] shadow-2xl flex flex-col items-center mb-6">
+          <div className="bg-card border border-primary/30 w-full p-8 rounded-[32px] shadow-2xl flex flex-col items-center mb-6 relative">
+            {isSaved && (
+               <span className="absolute -top-3 bg-green-500 text-white text-[9px] font-black tracking-widest uppercase px-3 py-1 rounded-full shadow-lg">
+                 Skorlar Kaydedildi ✅
+               </span>
+            )}
             <h3 className="display-font text-6xl text-primary font-black drop-shadow-sm">%{getAverageScore()}</h3>
-            <span className="text-xs uppercase tracking-widest text-text/50 mt-3 font-bold">Ortalama Başarı</span>
+            <span className="text-xs uppercase tracking-widest text-text/50 mt-2 font-bold">Senin Ortalaman</span>
           </div>
 
-          {!isSaved ? (
-            <div className="w-full bg-card border border-primary/20 p-5 rounded-2xl shadow-md mb-6">
-              <label className="text-xs uppercase tracking-widest text-primary font-bold mb-3 block text-center">Bu Skoru Kim Kaydediyor?</label>
-              <div className="flex gap-2 mb-3">
-                <button 
-                  onClick={() => { playSound("click"); setSelectedPlayer("Emircan"); }}
-                  className={`flex-1 py-3 rounded-xl font-bold transition-all ${selectedPlayer === "Emircan" ? 'bg-primary text-background shadow-md scale-105' : 'bg-background border border-primary/20 text-text/70'}`}
-                >
-                  Emircan
-                </button>
-                <button 
-                  onClick={() => { playSound("click"); setSelectedPlayer("Efsun"); }}
-                  className={`flex-1 py-3 rounded-xl font-bold transition-all ${selectedPlayer === "Efsun" ? 'bg-primary text-background shadow-md scale-105' : 'bg-background border border-primary/20 text-text/70'}`}
-                >
-                  Efsun
-                </button>
-              </div>
-              <button 
-                onClick={saveScoreToDatabase}
-                disabled={!selectedPlayer}
-                className="w-full bg-primary text-background py-3 rounded-xl font-bold shadow-lg hover:scale-[1.02] transition-transform disabled:opacity-50"
-              >
-                Skoru Kaydet 💾
-              </button>
-            </div>
-          ) : (
-            <div className="w-full bg-green-500/10 border border-green-500/30 text-green-500 p-4 rounded-2xl font-bold text-center mb-6">
-              Skor başarıyla kaydedildi! ✅
-            </div>
-          )}
-
-          <div className="flex flex-col gap-3 w-full">
+          <div className="flex flex-col gap-3 w-full mt-4">
             <button 
-              onClick={() => { 
-                setPhase("modeSelect"); 
-                setPlayMode(null);
-                setIsMeReady(false);
-                playSound("click"); 
-              }} 
-              className="w-full bg-card border border-primary/20 text-primary p-4 rounded-2xl shadow-sm hover:border-primary/50 transition-all font-bold text-lg"
+              onClick={returnToLobby} 
+              className="w-full bg-primary text-background p-4 rounded-2xl shadow-xl hover:scale-[1.02] transition-transform font-bold text-lg"
             >
-              🔄 Ana Menüye Dön
+              🔄 Tekrar Oyna (Lobiye Dön)
             </button>
             
-            <Link href="/games" onClick={() => playSound("click")} className="w-full bg-card border border-primary/20 text-text/80 p-4 rounded-2xl shadow-sm hover:border-primary/50 transition-all font-bold text-lg text-center flex items-center justify-center gap-2">
-              🎮 Oyunlar Menüsü
-            </Link>
+            <button 
+              onClick={returnToMenu} 
+              className="w-full bg-card border border-primary/20 text-primary p-4 rounded-2xl shadow-sm hover:border-primary/50 transition-all font-bold text-lg text-center"
+            >
+              ⬅️ Oyun Modu Seçimine Dön
+            </button>
           </div>
         </div>
       )}
