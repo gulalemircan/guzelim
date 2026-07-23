@@ -22,6 +22,8 @@ export default function GuessWhoPage() {
   const [winner, setWinner] = useState<string | null>(null);
 
   const targetOpponent = currentUser === "Emircan" ? "Efsun" : "Emircan";
+  const myPlayerField = currentUser === "Emircan" ? "p1_state" : "p2_state";
+  const opPlayerField = currentUser === "Emircan" ? "p2_state" : "p1_state";
 
   // Renk Hafızası Oyunundaki Kusursuz "Ref" Mimarisi
   const phaseRef = useRef(phase);
@@ -34,18 +36,21 @@ export default function GuessWhoPage() {
 
   useEffect(() => {
     const checkLobbyStatus = (data: any) => {
-      // Kimin kim olduğunu gelen verinin içinde dinamik anlıyoruz
-      const opState = currentUser === "Emircan" ? data.p2_state : data.p1_state;
-      const myState = currentUser === "Emircan" ? data.p1_state : data.p2_state;
+      // Kimin kim olduğunu gelen verinin içinden JSONB'den okuyoruz[cite: 3]
+      const opState = data[opPlayerField];
+      const myState = data[myPlayerField];
       const currentPhase = phaseRef.current;
 
       setIsOpponentReady(opState?.ready || false);
 
+      // Ana oyun lobisine dönme mantığı[cite: 3]
       if (data.status === 'waiting' && (currentPhase === 'finalResult' || currentPhase === 'playing')) {
          setPhase('settings');
          setIsMeReady(false);
          setWinner(null);
          setMySecretCharacter(null);
+         setMyFlippedCards(Array(30).fill(false));
+         setOpponentFlippedCards(Array(30).fill(false));
       }
 
       if (data.status === 'playing') {
@@ -66,7 +71,8 @@ export default function GuessWhoPage() {
     };
 
     const fetchInitialLobby = async () => {
-      const { data } = await supabase.from('multiplayer_state').select('*').eq('id', 2).single();
+      // DİKKAT: Artık sadece ID 1'i kullanıyoruz![cite: 3]
+      const { data } = await supabase.from('multiplayer_state').select('*').eq('id', 1).single();
       if (data) checkLobbyStatus(data);
     };
 
@@ -74,45 +80,39 @@ export default function GuessWhoPage() {
 
     const channel = supabase
       .channel('lobby-channel-guess')
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'multiplayer_state', filter: 'id=eq.2' }, (payload) => {
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'multiplayer_state', filter: 'id=eq.1' }, (payload) => {
         checkLobbyStatus(payload.new);
       })
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [currentUser]); 
+  }, [currentUser, myPlayerField, opPlayerField]); 
 
   const joinLobby = async () => {
     setPhase("settings");
     setIsMeReady(false);
     playSound("click");
 
-    const playerField = currentUser === "Emircan" ? "p1_state" : "p2_state";
-    const updateData: any = { [playerField]: { joined: true, ready: false, flipped: Array(30).fill(false), secret: null } };
+    const updateData: any = { [myPlayerField]: { joined: true, ready: false, flipped: Array(30).fill(false), secret: null } };
     
-    // Eski oyunumuzdaki gibi sadece Emircan status'u beklemeye alır
+    // Eski oyunumuzdaki gibi sadece Emircan status'u beklemeye alır[cite: 3]
     if (currentUser === "Emircan") updateData.status = 'waiting';
 
-    const { data: existing } = await supabase.from('multiplayer_state').select('id').eq('id', 2).single();
-    if (!existing) {
-        await supabase.from('multiplayer_state').insert({
-            id: 2,
-            status: 'waiting',
-            p1_state: { joined: currentUser === "Emircan", ready: false },
-            p2_state: { joined: currentUser !== "Emircan", ready: false }
-        });
-    } else {
-        await supabase.from('multiplayer_state').update(updateData).eq('id', 2);
-    }
+    // Insert yok, sadece ID: 1 update edilecek[cite: 3]
+    await supabase.from('multiplayer_state').update(updateData).eq('id', 1);
   };
 
   const returnToMenu = async () => {
     playSound("click");
-    const playerField = currentUser === "Emircan" ? "p1_state" : "p2_state";
-    await supabase.from('multiplayer_state').update({
-       status: 'waiting',
-       [playerField]: { joined: false, ready: false }
-    }).eq('id', 2);
+    // ID: 1 kullanılarak lobiden çıkış[cite: 3]
+    const { data } = await supabase.from('multiplayer_state').select('*').eq('id', 1).single();
+    if (data) {
+      await supabase.from('multiplayer_state').update({ 
+        status: 'waiting',
+        p1_state: { ...data.p1_state, joined: false, ready: false },
+        p2_state: { ...data.p2_state, joined: false, ready: false }
+      }).eq('id', 1);
+    }
     setPhase("modeSelect");
     setIsMeReady(false);
   };
@@ -120,14 +120,14 @@ export default function GuessWhoPage() {
   const toggleReady = async () => {
     playSound("click");
     const newReadyState = !isMeReady;
-    setIsMeReady(newReadyState); // Anında Yeşil UI (Optimistic)
+    setIsMeReady(newReadyState); // Anında Yeşil UI 
 
-    const playerField = currentUser === "Emircan" ? "p1_state" : "p2_state";
-    const { data } = await supabase.from('multiplayer_state').select('*').eq('id', 2).single();
+    // ID: 1'e direkt update[cite: 3]
+    const { data } = await supabase.from('multiplayer_state').select('*').eq('id', 1).single();
     if (data) {
        await supabase.from('multiplayer_state').update({
-          [playerField]: { ...data[playerField], joined: true, ready: newReadyState }
-       }).eq('id', 2);
+          [myPlayerField]: { ...data[myPlayerField], joined: true, ready: newReadyState }
+       }).eq('id', 1);
     }
   };
 
@@ -137,12 +137,13 @@ export default function GuessWhoPage() {
     let p2Secret = Math.floor(Math.random() * 30);
     while(p2Secret === p1Secret) p2Secret = Math.floor(Math.random() * 30);
 
+    // Bütün oyunları aynı masada (id: 1) yönetiyoruz[cite: 3]
     await supabase.from('multiplayer_state').update({
       status: 'playing',
-      shared_data: { winner: null },
+      shared_data: { winner: null, game_type: 'guess_who' },
       p1_state: { joined: true, ready: true, flipped: Array(30).fill(false), secret: p1Secret },
       p2_state: { joined: true, ready: true, flipped: Array(30).fill(false), secret: p2Secret }
-    }).eq('id', 2);
+    }).eq('id', 1);
   };
 
   const flipMyCard = async (index: number) => {
@@ -153,12 +154,11 @@ export default function GuessWhoPage() {
     newFlipped[index] = true;
     setMyFlippedCards(newFlipped); 
 
-    const playerField = currentUser === "Emircan" ? "p1_state" : "p2_state";
-    const { data } = await supabase.from('multiplayer_state').select('*').eq('id', 2).single();
+    const { data } = await supabase.from('multiplayer_state').select('*').eq('id', 1).single();
     if (data) {
         await supabase.from('multiplayer_state').update({
-            [playerField]: { ...data[playerField], flipped: newFlipped }
-        }).eq('id', 2);
+            [myPlayerField]: { ...data[myPlayerField], flipped: newFlipped }
+        }).eq('id', 1);
     }
   };
 
@@ -166,19 +166,18 @@ export default function GuessWhoPage() {
       playSound("success");
       await supabase.from('multiplayer_state').update({
           status: 'game_over',
-          shared_data: { winner: currentUser }
-      }).eq('id', 2);
+          shared_data: { winner: currentUser, game_type: 'guess_who' }
+      }).eq('id', 1);
   };
 
-  // Sekme Kapanırsa Odadan Düşme Olayı (Renk Hafızası ile aynı)
+  // Sekme Kapanırsa Odadan Düşme Olayı (Renk Hafızası ile aynı)[cite: 3]
   useEffect(() => {
     const handleBeforeUnload = () => {
-         const playerField = currentUser === "Emircan" ? "p1_state" : "p2_state";
-         supabase.from('multiplayer_state').update({ [playerField]: { joined: false, ready: false } }).eq('id', 2).then();
+         supabase.from('multiplayer_state').update({ [myPlayerField]: { joined: false, ready: false } }).eq('id', 1).then();
     };
     window.addEventListener("beforeunload", handleBeforeUnload);
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-  }, [currentUser]);
+  }, [myPlayerField]);
 
   const renderOpponentCard = (index: number, isFlipped: boolean) => {
     return (
