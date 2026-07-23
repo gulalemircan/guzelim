@@ -70,7 +70,6 @@ export default function GuessWhoPage() {
     setLocalPhase("settings");
     playSound("click");
     
-    // Anında ekrana yansıt
     setDbState((prev: any) => ({ ...prev, [myPlayerField]: { joined: true, ready: false } }));
 
     const { data: existing, error } = await supabase.from('multiplayer_state').select('*').eq('id', 2).single();
@@ -93,20 +92,16 @@ export default function GuessWhoPage() {
     playSound("click");
     const newReadyState = !isMeReady;
     
-    // 🚀 OPTIMISTIC UI: Supabase'i beklemeden ekranı anında YEŞİL yap!
     setDbState((prev: any) => ({
         ...prev,
         [myPlayerField]: { ...prev?.[myPlayerField], joined: true, ready: newReadyState }
     }));
 
-    // Arka planda veritabanına yaz
     const { data: latest } = await supabase.from('multiplayer_state').select('*').eq('id', 2).single();
     if (latest) {
-        const { error } = await supabase.from('multiplayer_state').update({
+        await supabase.from('multiplayer_state').update({
             [myPlayerField]: { ...latest[myPlayerField], joined: true, ready: newReadyState }
         }).eq('id', 2);
-        
-        if (error) console.error("Güncelleme Hatası:", error.message);
     }
   };
 
@@ -116,7 +111,6 @@ export default function GuessWhoPage() {
     let p2Secret = Math.floor(Math.random() * 30);
     while(p2Secret === p1Secret) p2Secret = Math.floor(Math.random() * 30);
 
-    // Anında başla
     setLocalPhase("playing");
 
     await supabase.from('multiplayer_state').update({
@@ -130,7 +124,6 @@ export default function GuessWhoPage() {
   const resetLobby = async () => {
     playSound("click");
     
-    // Anında sıfırla
     setDbState(null);
     setLocalPhase("modeSelect");
 
@@ -200,6 +193,14 @@ export default function GuessWhoPage() {
   return (
     <main className="flex flex-col min-h-screen transition-colors duration-500 relative bg-[#1e293b]">
       <div className="absolute inset-0 pointer-events-none opacity-[0.2]" style={{ backgroundImage: 'radial-gradient(#000000 1px, transparent 1px)', backgroundSize: '16px 16px' }}></div>
+
+      {/* 🚀 GİZLİ VERİTABANI RADARI: Nerede koptuğumuzu buradan göreceğiz */}
+      {isEmircan && (
+        <div className="fixed bottom-2 right-2 text-[10px] text-white/70 bg-black/80 p-3 rounded-lg z-50 pointer-events-none shadow-2xl border border-white/20 font-mono">
+           DB (Sen) Hazır mı?: <span className={isMeReady ? "text-green-400" : "text-red-400"}>{String(isMeReady)}</span> <br/>
+           DB (Efsun) Hazır mı?: <span className={isOpponentReady ? "text-green-400" : "text-red-400"}>{String(isOpponentReady)}</span>
+        </div>
+      )}
 
       {localPhase === "playing" ? (
         <div className="flex-1 flex flex-col justify-between w-full h-[100dvh] overflow-hidden py-4 px-2 z-10">
