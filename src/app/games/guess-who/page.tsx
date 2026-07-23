@@ -13,10 +13,7 @@ export default function GuessWhoPage() {
   const [currentUser, setCurrentUser] = useState<string>("Emircan");
   const [localPhase, setLocalPhase] = useState<"modeSelect" | "settings" | "playing" | "finalResult">("modeSelect");
   
-  // 🚀 MERKEZİ BEYİN: Tüm oyun durumu tek bir yerde tutuluyor
   const [dbState, setDbState] = useState<any>(null);
-  
-  // Hızlı tepki vermesi için sadece kendi kartlarımızın yerel kopyası
   const [myFlippedCards, setMyFlippedCards] = useState<boolean[]>(Array(30).fill(false));
 
   const isEmircan = currentUser.toLowerCase() === "emircan";
@@ -24,20 +21,17 @@ export default function GuessWhoPage() {
   const myPlayerField = isEmircan ? "p1_state" : "p2_state";
   const opPlayerField = isEmircan ? "p2_state" : "p1_state";
 
-  // Veritabanından türetilen ve ASLA şaşmayan canlı değerler
   const isMeReady = dbState?.[myPlayerField]?.ready || false;
   const isOpponentReady = dbState?.[opPlayerField]?.ready || false;
   const opponentFlippedCards = dbState?.[opPlayerField]?.flipped || Array(30).fill(false);
   const mySecretCharacter = dbState?.[myPlayerField]?.secret ?? null;
   const winner = dbState?.shared_data?.winner || null;
 
-  // 1. KİMLİK KONTROLÜ
   useEffect(() => {
     const savedName = localStorage.getItem("myName");
     if (savedName) setCurrentUser(savedName);
   }, []);
 
-  // 2. KESİNTİSİZ SUPABASE BAĞLANTISI (Burası çözüldü!)
   useEffect(() => {
     const fetchInitial = async () => {
       const { data } = await supabase.from('multiplayer_state').select('*').eq('id', 2).single();
@@ -45,18 +39,15 @@ export default function GuessWhoPage() {
     };
     fetchInitial();
 
-    // Kanal adını yeniledik ki eski hatalı kanala takılı kalmasın
     const channel = supabase.channel('guess-who-bulletproof')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'multiplayer_state', filter: 'id=eq.2' }, (payload) => {
-        if (payload.new) setDbState(payload.new); // Her değişiklikte merkezi beyni günceller
+        if (payload.new) setDbState(payload.new); 
       })
       .subscribe();
 
-    // Dependency array (Bağımlılık dizisi) tamamen BOŞ! Yani bağlantı asla kes-kopyala yapmayacak.
     return () => { supabase.removeChannel(channel); };
   }, []); 
 
-  // 3. EKRAN AŞAMALARINI VERİTABANINA GÖRE YÖNETME
   useEffect(() => {
     if (!dbState) return;
 
@@ -65,7 +56,6 @@ export default function GuessWhoPage() {
       playSound("start");
     }
     
-    // Oynarken veritabanındaki kapalı kartları yerel ekrana eşitle
     if (dbState.status === 'playing' && dbState[myPlayerField]?.flipped) {
       setMyFlippedCards(dbState[myPlayerField].flipped);
     }
@@ -80,10 +70,13 @@ export default function GuessWhoPage() {
     setLocalPhase("settings");
     playSound("click");
     
+    // Anında ekrana yansıt
+    setDbState((prev: any) => ({ ...prev, [myPlayerField]: { joined: true, ready: false } }));
+
     const { data: existing, error } = await supabase.from('multiplayer_state').select('*').eq('id', 2).single();
 
     if (!existing || error) {
-        await supabase.from('multiplayer_state').insert({
+        await supabase.from('multiplayer_state').upsert({
             id: 2,
             status: 'waiting',
             p1_state: { joined: isEmircan, ready: false },
@@ -98,12 +91,22 @@ export default function GuessWhoPage() {
 
   const toggleReady = async () => {
     playSound("click");
-    // Çakışmayı önlemek için önce en güncel veriyi okuyup sadece kendi alanımızı değiştiriyoruz
+    const newReadyState = !isMeReady;
+    
+    // 🚀 OPTIMISTIC UI: Supabase'i beklemeden ekranı anında YEŞİL yap!
+    setDbState((prev: any) => ({
+        ...prev,
+        [myPlayerField]: { ...prev?.[myPlayerField], joined: true, ready: newReadyState }
+    }));
+
+    // Arka planda veritabanına yaz
     const { data: latest } = await supabase.from('multiplayer_state').select('*').eq('id', 2).single();
     if (latest) {
-        await supabase.from('multiplayer_state').update({
-            [myPlayerField]: { ...latest[myPlayerField], joined: true, ready: !isMeReady }
+        const { error } = await supabase.from('multiplayer_state').update({
+            [myPlayerField]: { ...latest[myPlayerField], joined: true, ready: newReadyState }
         }).eq('id', 2);
+        
+        if (error) console.error("Güncelleme Hatası:", error.message);
     }
   };
 
@@ -112,6 +115,9 @@ export default function GuessWhoPage() {
     const p1Secret = Math.floor(Math.random() * 30);
     let p2Secret = Math.floor(Math.random() * 30);
     while(p2Secret === p1Secret) p2Secret = Math.floor(Math.random() * 30);
+
+    // Anında başla
+    setLocalPhase("playing");
 
     await supabase.from('multiplayer_state').update({
       status: 'playing',
@@ -123,6 +129,11 @@ export default function GuessWhoPage() {
 
   const resetLobby = async () => {
     playSound("click");
+    
+    // Anında sıfırla
+    setDbState(null);
+    setLocalPhase("modeSelect");
+
     await supabase.from('multiplayer_state').upsert({
         id: 2,
         status: 'waiting',
@@ -130,19 +141,16 @@ export default function GuessWhoPage() {
         p2_state: { joined: false, ready: false },
         shared_data: {}
     });
-    setLocalPhase("modeSelect");
   };
 
   const flipMyCard = async (index: number) => {
     if (myFlippedCards[index]) return;
     playSound("click"); 
 
-    // Önce ekranda hemen kapat (gecikme hissi olmasın)
     const newFlipped = [...myFlippedCards];
     newFlipped[index] = true;
     setMyFlippedCards(newFlipped); 
 
-    // Sonra veritabanına fırlat
     const { data: latest } = await supabase.from('multiplayer_state').select('*').eq('id', 2).single();
     if (latest) {
         await supabase.from('multiplayer_state').update({
