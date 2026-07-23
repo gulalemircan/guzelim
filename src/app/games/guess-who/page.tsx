@@ -12,14 +12,18 @@ const CHARACTERS = Array.from({ length: 30 }, (_, i) => ({
 export default function GuessWhoPage() {
   const [currentUser, setCurrentUser] = useState<string>("Emircan");
   const [phase, setPhase] = useState<"modeSelect" | "settings" | "playing" | "finalResult">("modeSelect");
-  const [isOpponentReady, setIsOpponentReady] = useState(false);
-  const [isMeReady, setIsMeReady] = useState(false);
   
-  // BÜYÜK/KÜÇÜK HARF TOLERANSI EKLENDİ (Kimlik kaymasını önler)
+  // 🚀 TEK VE KESİN DOĞRU: Bütün durumu veritabanından anlık çeken Ana State
+  const [gameState, setGameState] = useState<any>(null);
+
   const isEmircan = currentUser.toLowerCase() === "emircan";
   const targetOpponent = isEmircan ? "Efsun" : "Emircan";
   const myPlayerField = isEmircan ? "p1_state" : "p2_state";
   const opPlayerField = isEmircan ? "p2_state" : "p1_state";
+
+  // Hazır olma durumları artık lokalden değil, DİREKT veritabanından okunuyor
+  const isMeReady = gameState?.[myPlayerField]?.ready || false;
+  const isOpponentReady = gameState?.[opPlayerField]?.ready || false;
 
   const [myFlippedCards, setMyFlippedCards] = useState<boolean[]>(Array(30).fill(false));
   const [opponentFlippedCards, setOpponentFlippedCards] = useState<boolean[]>(Array(30).fill(false));
@@ -32,39 +36,27 @@ export default function GuessWhoPage() {
   }, []);
 
   useEffect(() => {
-    const checkLobbyStatus = (data: any) => {
-      const myState = data[myPlayerField];
-      const opState = data[opPlayerField];
-      
-      setIsOpponentReady(opState?.ready || false);
-
-      if (data.status === 'waiting' && phase !== 'modeSelect' && phase !== 'settings') {
-         setPhase('settings');
-         setIsMeReady(false);
-      }
-
-      if (data.status === 'playing') {
-          if (phase === 'settings') {
-             setPhase('playing');
-             playSound("start");
-          }
-          setMyFlippedCards(myState?.flipped || Array(30).fill(false));
-          setOpponentFlippedCards(opState?.flipped || Array(30).fill(false));
-          setMySecretCharacter(myState?.secret || null);
-      }
-
-      if (data.status === 'game_over') {
-          setWinner(data.shared_data?.winner || null);
-          if (phase !== 'finalResult') {
-              setPhase('finalResult');
-              playSound("over");
-          }
-      }
-    };
-
     const fetchInitialLobby = async () => {
       const { data } = await supabase.from('multiplayer_state').select('*').eq('id', 2).single();
-      if (data) checkLobbyStatus(data);
+      if (data) updateLocalState(data);
+    };
+
+    const updateLocalState = (data: any) => {
+      setGameState(data); // Veritabanı her değiştiğinde burayı günceller
+
+      if (data.status === 'playing' && phase !== 'playing') {
+          setPhase('playing');
+          playSound("start");
+          setMyFlippedCards(data[myPlayerField]?.flipped || Array(30).fill(false));
+          setOpponentFlippedCards(data[opPlayerField]?.flipped || Array(30).fill(false));
+          setMySecretCharacter(data[myPlayerField]?.secret || null);
+      } else if (data.status === 'game_over' && phase !== 'finalResult') {
+          setWinner(data.shared_data?.winner || null);
+          setPhase('finalResult');
+          playSound("over");
+      } else if (data.status === 'waiting' && phase === 'playing') {
+          setPhase('modeSelect'); 
+      }
     };
 
     fetchInitialLobby();
@@ -72,23 +64,20 @@ export default function GuessWhoPage() {
     const channel = supabase
       .channel('lobby-channel-guess')
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'multiplayer_state', filter: 'id=eq.2' }, (payload) => {
-        checkLobbyStatus(payload.new);
+        updateLocalState(payload.new);
       })
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
   }, [myPlayerField, opPlayerField, phase]);
 
-  // VERİTABANI ÇAKIŞMALARINI (RACE CONDITION) ÖNLEYEN GÜVENLİ GİRİŞ
   const joinLobby = async () => {
     setPhase("settings");
-    setIsMeReady(false);
     playSound("click");
     
     const { data: existing, error } = await supabase.from('multiplayer_state').select('*').eq('id', 2).single();
 
     if (!existing || error) {
-        // Tablo boşsa veya yoksa sıfırdan kur
         await supabase.from('multiplayer_state').insert({
             id: 2,
             status: 'waiting',
@@ -96,7 +85,6 @@ export default function GuessWhoPage() {
             p2_state: !isEmircan ? { joined: true, ready: false } : { joined: false, ready: false },
         });
     } else {
-        // Tablo varsa sadece kendi alanını güncelle, Efsun'unkini ezme
         await supabase.from('multiplayer_state').update({
             [myPlayerField]: { ...existing[myPlayerField], joined: true, ready: false }
         }).eq('id', 2);
@@ -106,14 +94,11 @@ export default function GuessWhoPage() {
   const toggleReady = async () => {
     playSound("click");
     const newReadyState = !isMeReady;
-    setIsMeReady(newReadyState);
-
-    const { data: existing } = await supabase.from('multiplayer_state').select('*').eq('id', 2).single();
-    if (existing) {
-        await supabase.from('multiplayer_state').update({
-            [myPlayerField]: { ...existing[myPlayerField], joined: true, ready: newReadyState }
-        }).eq('id', 2);
-    }
+    
+    // Doğrudan veritabanına yazıyoruz, state zaten kendiliğinden güncellenecek
+    await supabase.from('multiplayer_state').update({
+        [myPlayerField]: { ...gameState?.[myPlayerField], joined: true, ready: newReadyState }
+    }).eq('id', 2);
   };
 
   const startGame = async () => {
@@ -130,7 +115,6 @@ export default function GuessWhoPage() {
     }).eq('id', 2);
   };
 
-  // TIKANIKLIK AÇICI: VERİTABANINI SIFIRLAMA BUTONU
   const resetLobby = async () => {
     playSound("click");
     await supabase.from('multiplayer_state').upsert({
@@ -141,7 +125,6 @@ export default function GuessWhoPage() {
         shared_data: {}
     });
     setPhase("modeSelect");
-    setIsMeReady(false);
   };
 
   const flipMyCard = async (index: number) => {
@@ -267,7 +250,6 @@ export default function GuessWhoPage() {
             {phase === "settings" && (
                 <div className="flex flex-col gap-6 w-full mt-10 relative">
                   
-                  {/* SADECE SANA GÖZÜKEN "TAKILMA ÇÖZÜCÜ" SIFIRLAMA BUTONU */}
                   {isEmircan && (
                     <button onClick={resetLobby} className="absolute -top-10 right-0 text-[10px] bg-red-600/20 text-red-400 px-3 py-1 rounded-full border border-red-500/30 hover:bg-red-600 hover:text-white transition-all">
                        🔄 Odayı Temizle
@@ -285,6 +267,12 @@ export default function GuessWhoPage() {
                       <button onClick={toggleReady} className={`w-full py-5 rounded-[24px] font-black text-xl tracking-widest uppercase shadow-2xl transition-all duration-300 ${isMeReady ? 'bg-green-500 text-white' : 'bg-card border-4 border-primary text-primary hover:bg-primary hover:text-background'}`}>
                         {isMeReady ? "👍 HAZIRSIN" : "HAZIRIM"}
                       </button>
+                      
+                      {/* VERİTABANI RADARI (Kimin bağlanıp bağlanmadığını net görürsün) */}
+                      <div className="flex gap-6 mt-2 text-[11px] font-bold tracking-widest uppercase text-text/50">
+                          <span className={isMeReady ? "text-green-500" : ""}>{currentUser}: {isMeReady ? "Hazır" : "Bekliyor"}</span>
+                          <span className={isOpponentReady ? "text-green-500" : ""}>{targetOpponent}: {isOpponentReady ? "Hazır" : "Bekliyor"}</span>
+                      </div>
                   </div>
                   
                   {/* BAŞLATMA BUTONU */}
