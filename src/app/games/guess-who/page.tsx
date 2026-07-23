@@ -18,6 +18,8 @@ export default function GuessWhoPage() {
 
   const isEmircan = currentUser.toLowerCase() === "emircan";
   const targetOpponent = isEmircan ? "Efsun" : "Emircan";
+  
+  // Eğer iki cihaz da "Emircan" olursa ikisi de p1_state'e yazar! Sorun tam olarak buydu.
   const myPlayerField = isEmircan ? "p1_state" : "p2_state";
   const opPlayerField = isEmircan ? "p2_state" : "p1_state";
 
@@ -28,6 +30,7 @@ export default function GuessWhoPage() {
   const winner = dbState?.shared_data?.winner || null;
 
   useEffect(() => {
+    // Efsun'un telefonu burayı bulamıyordu, bu yüzden Emircan olarak kalıyordu.
     const savedName = localStorage.getItem("myName");
     if (savedName) setCurrentUser(savedName);
   }, []);
@@ -194,7 +197,7 @@ export default function GuessWhoPage() {
     <main className="flex flex-col min-h-screen transition-colors duration-500 relative bg-[#1e293b]">
       <div className="absolute inset-0 pointer-events-none opacity-[0.2]" style={{ backgroundImage: 'radial-gradient(#000000 1px, transparent 1px)', backgroundSize: '16px 16px' }}></div>
 
-      {/* 🚀 GİZLİ VERİTABANI RADARI: Nerede koptuğumuzu buradan göreceğiz */}
+      {/* GİZLİ VERİTABANI RADARI (Sorun çözülene kadar kalsın) */}
       {isEmircan && (
         <div className="fixed bottom-2 right-2 text-[10px] text-white/70 bg-black/80 p-3 rounded-lg z-50 pointer-events-none shadow-2xl border border-white/20 font-mono">
            DB (Sen) Hazır mı?: <span className={isMeReady ? "text-green-400" : "text-red-400"}>{String(isMeReady)}</span> <br/>
@@ -250,6 +253,27 @@ export default function GuessWhoPage() {
 
             {localPhase === "modeSelect" && (
                 <div className="flex flex-col items-center justify-center gap-8 w-full mt-10">
+                  
+                  {/* KÖKTEN ÇÖZÜM: KİMLİK SEÇİCİ */}
+                  {/* Cihazın Efsun'u tanımama ihtimaline karşı zorunlu kimlik doğrulaması */}
+                  <div className="bg-slate-900/80 p-4 rounded-3xl border border-yellow-500/30 flex flex-col items-center gap-3 w-full max-w-sm shadow-[0_0_20px_rgba(234,179,8,0.1)]">
+                      <span className="text-xs font-black uppercase tracking-widest text-yellow-500 text-center">Şu An Giriş Yapan:</span>
+                      <div className="flex gap-2 w-full">
+                          <button 
+                              onClick={() => { setCurrentUser("Emircan"); localStorage.setItem("myName", "Emircan"); }} 
+                              className={`flex-1 py-3 rounded-2xl font-black text-sm transition-all duration-300 ${isEmircan ? "bg-blue-600 text-white shadow-[0_0_15px_rgba(37,99,235,0.5)] scale-105 border-2 border-blue-400" : "bg-slate-800 text-slate-400 border border-slate-700"}`}
+                          >
+                              Emircan
+                          </button>
+                          <button 
+                              onClick={() => { setCurrentUser("Efsun"); localStorage.setItem("myName", "Efsun"); }} 
+                              className={`flex-1 py-3 rounded-2xl font-black text-sm transition-all duration-300 ${!isEmircan ? "bg-red-600 text-white shadow-[0_0_15px_rgba(220,38,38,0.5)] scale-105 border-2 border-red-400" : "bg-slate-800 text-slate-400 border border-slate-700"}`}
+                          >
+                              Efsun
+                          </button>
+                      </div>
+                  </div>
+
                   <div className="text-center mb-2">
                     <div className="text-7xl drop-shadow-xl mb-4 animate-bounce">🕵️‍♂️</div>
                     <h2 className="display-font text-4xl text-white font-black tracking-widest drop-shadow-lg">BİL BAKALIM KİM?</h2>
