@@ -13,17 +13,14 @@ export default function GuessWhoPage() {
   const [currentUser, setCurrentUser] = useState<string>("Emircan");
   const [phase, setPhase] = useState<"modeSelect" | "settings" | "playing" | "finalResult">("modeSelect");
   
-  // 🚀 TEK VE KESİN DOĞRU: Bütün durumu veritabanından anlık çeken Ana State
-  const [gameState, setGameState] = useState<any>(null);
+  // Hem anında tepki veren yerel state, hem de Supabase kontrolü bir arada
+  const [isOpponentReady, setIsOpponentReady] = useState(false);
+  const [isMeReady, setIsMeReady] = useState(false);
 
   const isEmircan = currentUser.toLowerCase() === "emircan";
   const targetOpponent = isEmircan ? "Efsun" : "Emircan";
   const myPlayerField = isEmircan ? "p1_state" : "p2_state";
   const opPlayerField = isEmircan ? "p2_state" : "p1_state";
-
-  // Hazır olma durumları artık lokalden değil, DİREKT veritabanından okunuyor
-  const isMeReady = gameState?.[myPlayerField]?.ready || false;
-  const isOpponentReady = gameState?.[opPlayerField]?.ready || false;
 
   const [myFlippedCards, setMyFlippedCards] = useState<boolean[]>(Array(30).fill(false));
   const [opponentFlippedCards, setOpponentFlippedCards] = useState<boolean[]>(Array(30).fill(false));
@@ -36,13 +33,10 @@ export default function GuessWhoPage() {
   }, []);
 
   useEffect(() => {
-    const fetchInitialLobby = async () => {
-      const { data } = await supabase.from('multiplayer_state').select('*').eq('id', 2).single();
-      if (data) updateLocalState(data);
-    };
-
     const updateLocalState = (data: any) => {
-      setGameState(data); // Veritabanı her değiştiğinde burayı günceller
+      // Radarlar için durumları güncelle
+      setIsMeReady(data[myPlayerField]?.ready || false);
+      setIsOpponentReady(data[opPlayerField]?.ready || false);
 
       if (data.status === 'playing' && phase !== 'playing') {
           setPhase('playing');
@@ -57,6 +51,11 @@ export default function GuessWhoPage() {
       } else if (data.status === 'waiting' && phase === 'playing') {
           setPhase('modeSelect'); 
       }
+    };
+
+    const fetchInitialLobby = async () => {
+      const { data } = await supabase.from('multiplayer_state').select('*').eq('id', 2).single();
+      if (data) updateLocalState(data);
     };
 
     fetchInitialLobby();
@@ -93,12 +92,17 @@ export default function GuessWhoPage() {
 
   const toggleReady = async () => {
     playSound("click");
+    // 1. Ekranı anında yeşile çevir (Donma hissini yok et)
     const newReadyState = !isMeReady;
+    setIsMeReady(newReadyState);
     
-    // Doğrudan veritabanına yazıyoruz, state zaten kendiliğinden güncellenecek
-    await supabase.from('multiplayer_state').update({
-        [myPlayerField]: { ...gameState?.[myPlayerField], joined: true, ready: newReadyState }
-    }).eq('id', 2);
+    // 2. Arka planda veritabanına kaydet
+    const { data: existing } = await supabase.from('multiplayer_state').select('*').eq('id', 2).single();
+    if (existing) {
+        await supabase.from('multiplayer_state').update({
+            [myPlayerField]: { ...existing[myPlayerField], joined: true, ready: newReadyState }
+        }).eq('id', 2);
+    }
   };
 
   const startGame = async () => {
@@ -268,14 +272,12 @@ export default function GuessWhoPage() {
                         {isMeReady ? "👍 HAZIRSIN" : "HAZIRIM"}
                       </button>
                       
-                      {/* VERİTABANI RADARI (Kimin bağlanıp bağlanmadığını net görürsün) */}
                       <div className="flex gap-6 mt-2 text-[11px] font-bold tracking-widest uppercase text-text/50">
                           <span className={isMeReady ? "text-green-500" : ""}>{currentUser}: {isMeReady ? "Hazır" : "Bekliyor"}</span>
                           <span className={isOpponentReady ? "text-green-500" : ""}>{targetOpponent}: {isOpponentReady ? "Hazır" : "Bekliyor"}</span>
                       </div>
                   </div>
                   
-                  {/* BAŞLATMA BUTONU */}
                   {isEmircan && (
                     <button onClick={startGame} disabled={!isOpponentReady || !isMeReady} className={`w-full mt-2 p-5 rounded-2xl shadow-xl transition-all duration-300 font-black text-lg tracking-widest uppercase ${isOpponentReady && isMeReady ? 'bg-blue-600 text-white hover:scale-[1.02] ring-4 ring-blue-400/30' : 'bg-background border-2 border-primary/20 text-primary/40 cursor-not-allowed'}`}>
                       {isOpponentReady && isMeReady ? "PANOLARI AÇ 🚀" : "EFSUN BEKLENİYOR..."}
