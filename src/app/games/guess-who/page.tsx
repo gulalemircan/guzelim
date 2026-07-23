@@ -11,67 +11,73 @@ const CHARACTERS = Array.from({ length: 30 }, (_, i) => ({
 
 export default function GuessWhoPage() {
   const [currentUser, setCurrentUser] = useState<string>("Emircan");
-  const [phase, setPhase] = useState<"modeSelect" | "settings" | "playing" | "finalResult">("modeSelect");
+  const [localPhase, setLocalPhase] = useState<"modeSelect" | "settings" | "playing" | "finalResult">("modeSelect");
   
-  // Hem anında tepki veren yerel state, hem de Supabase kontrolü bir arada
-  const [isOpponentReady, setIsOpponentReady] = useState(false);
-  const [isMeReady, setIsMeReady] = useState(false);
+  // 🚀 MERKEZİ BEYİN: Tüm oyun durumu tek bir yerde tutuluyor
+  const [dbState, setDbState] = useState<any>(null);
+  
+  // Hızlı tepki vermesi için sadece kendi kartlarımızın yerel kopyası
+  const [myFlippedCards, setMyFlippedCards] = useState<boolean[]>(Array(30).fill(false));
 
   const isEmircan = currentUser.toLowerCase() === "emircan";
   const targetOpponent = isEmircan ? "Efsun" : "Emircan";
   const myPlayerField = isEmircan ? "p1_state" : "p2_state";
   const opPlayerField = isEmircan ? "p2_state" : "p1_state";
 
-  const [myFlippedCards, setMyFlippedCards] = useState<boolean[]>(Array(30).fill(false));
-  const [opponentFlippedCards, setOpponentFlippedCards] = useState<boolean[]>(Array(30).fill(false));
-  const [mySecretCharacter, setMySecretCharacter] = useState<number | null>(null);
-  const [winner, setWinner] = useState<string | null>(null);
+  // Veritabanından türetilen ve ASLA şaşmayan canlı değerler
+  const isMeReady = dbState?.[myPlayerField]?.ready || false;
+  const isOpponentReady = dbState?.[opPlayerField]?.ready || false;
+  const opponentFlippedCards = dbState?.[opPlayerField]?.flipped || Array(30).fill(false);
+  const mySecretCharacter = dbState?.[myPlayerField]?.secret ?? null;
+  const winner = dbState?.shared_data?.winner || null;
 
+  // 1. KİMLİK KONTROLÜ
   useEffect(() => {
     const savedName = localStorage.getItem("myName");
     if (savedName) setCurrentUser(savedName);
   }, []);
 
+  // 2. KESİNTİSİZ SUPABASE BAĞLANTISI (Burası çözüldü!)
   useEffect(() => {
-    const updateLocalState = (data: any) => {
-      // Radarlar için durumları güncelle
-      setIsMeReady(data[myPlayerField]?.ready || false);
-      setIsOpponentReady(data[opPlayerField]?.ready || false);
-
-      if (data.status === 'playing' && phase !== 'playing') {
-          setPhase('playing');
-          playSound("start");
-          setMyFlippedCards(data[myPlayerField]?.flipped || Array(30).fill(false));
-          setOpponentFlippedCards(data[opPlayerField]?.flipped || Array(30).fill(false));
-          setMySecretCharacter(data[myPlayerField]?.secret || null);
-      } else if (data.status === 'game_over' && phase !== 'finalResult') {
-          setWinner(data.shared_data?.winner || null);
-          setPhase('finalResult');
-          playSound("over");
-      } else if (data.status === 'waiting' && phase === 'playing') {
-          setPhase('modeSelect'); 
-      }
-    };
-
-    const fetchInitialLobby = async () => {
+    const fetchInitial = async () => {
       const { data } = await supabase.from('multiplayer_state').select('*').eq('id', 2).single();
-      if (data) updateLocalState(data);
+      if (data) setDbState(data);
     };
+    fetchInitial();
 
-    fetchInitialLobby();
-
-    const channel = supabase
-      .channel('lobby-channel-guess')
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'multiplayer_state', filter: 'id=eq.2' }, (payload) => {
-        updateLocalState(payload.new);
+    // Kanal adını yeniledik ki eski hatalı kanala takılı kalmasın
+    const channel = supabase.channel('guess-who-bulletproof')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'multiplayer_state', filter: 'id=eq.2' }, (payload) => {
+        if (payload.new) setDbState(payload.new); // Her değişiklikte merkezi beyni günceller
       })
       .subscribe();
 
+    // Dependency array (Bağımlılık dizisi) tamamen BOŞ! Yani bağlantı asla kes-kopyala yapmayacak.
     return () => { supabase.removeChannel(channel); };
-  }, [myPlayerField, opPlayerField, phase]);
+  }, []); 
+
+  // 3. EKRAN AŞAMALARINI VERİTABANINA GÖRE YÖNETME
+  useEffect(() => {
+    if (!dbState) return;
+
+    if (dbState.status === 'playing' && localPhase !== 'playing') {
+      setLocalPhase('playing');
+      playSound("start");
+    }
+    
+    // Oynarken veritabanındaki kapalı kartları yerel ekrana eşitle
+    if (dbState.status === 'playing' && dbState[myPlayerField]?.flipped) {
+      setMyFlippedCards(dbState[myPlayerField].flipped);
+    }
+
+    if (dbState.status === 'game_over' && localPhase !== 'finalResult') {
+      setLocalPhase('finalResult');
+      playSound("over");
+    }
+  }, [dbState, localPhase, myPlayerField]);
 
   const joinLobby = async () => {
-    setPhase("settings");
+    setLocalPhase("settings");
     playSound("click");
     
     const { data: existing, error } = await supabase.from('multiplayer_state').select('*').eq('id', 2).single();
@@ -80,8 +86,8 @@ export default function GuessWhoPage() {
         await supabase.from('multiplayer_state').insert({
             id: 2,
             status: 'waiting',
-            p1_state: isEmircan ? { joined: true, ready: false } : { joined: false, ready: false },
-            p2_state: !isEmircan ? { joined: true, ready: false } : { joined: false, ready: false },
+            p1_state: { joined: isEmircan, ready: false },
+            p2_state: { joined: !isEmircan, ready: false },
         });
     } else {
         await supabase.from('multiplayer_state').update({
@@ -92,15 +98,11 @@ export default function GuessWhoPage() {
 
   const toggleReady = async () => {
     playSound("click");
-    // 1. Ekranı anında yeşile çevir (Donma hissini yok et)
-    const newReadyState = !isMeReady;
-    setIsMeReady(newReadyState);
-    
-    // 2. Arka planda veritabanına kaydet
-    const { data: existing } = await supabase.from('multiplayer_state').select('*').eq('id', 2).single();
-    if (existing) {
+    // Çakışmayı önlemek için önce en güncel veriyi okuyup sadece kendi alanımızı değiştiriyoruz
+    const { data: latest } = await supabase.from('multiplayer_state').select('*').eq('id', 2).single();
+    if (latest) {
         await supabase.from('multiplayer_state').update({
-            [myPlayerField]: { ...existing[myPlayerField], joined: true, ready: newReadyState }
+            [myPlayerField]: { ...latest[myPlayerField], joined: true, ready: !isMeReady }
         }).eq('id', 2);
     }
   };
@@ -128,34 +130,33 @@ export default function GuessWhoPage() {
         p2_state: { joined: false, ready: false },
         shared_data: {}
     });
-    setPhase("modeSelect");
+    setLocalPhase("modeSelect");
   };
 
   const flipMyCard = async (index: number) => {
     if (myFlippedCards[index]) return;
     playSound("click"); 
 
+    // Önce ekranda hemen kapat (gecikme hissi olmasın)
     const newFlipped = [...myFlippedCards];
     newFlipped[index] = true;
     setMyFlippedCards(newFlipped); 
 
-    const { data } = await supabase.from('multiplayer_state').select('*').eq('id', 2).single();
-    if (data) {
+    // Sonra veritabanına fırlat
+    const { data: latest } = await supabase.from('multiplayer_state').select('*').eq('id', 2).single();
+    if (latest) {
         await supabase.from('multiplayer_state').update({
-            [myPlayerField]: { ...data[myPlayerField], flipped: newFlipped }
+            [myPlayerField]: { ...latest[myPlayerField], flipped: newFlipped }
         }).eq('id', 2);
     }
   };
 
   const declareWin = async () => {
       playSound("success");
-      const { data } = await supabase.from('multiplayer_state').select('*').eq('id', 2).single();
-      if (data) {
-          await supabase.from('multiplayer_state').update({
-              status: 'game_over',
-              shared_data: { winner: currentUser }
-          }).eq('id', 2);
-      }
+      await supabase.from('multiplayer_state').update({
+          status: 'game_over',
+          shared_data: { winner: currentUser }
+      }).eq('id', 2);
   };
 
   const renderOpponentCard = (index: number, isFlipped: boolean) => {
@@ -192,7 +193,7 @@ export default function GuessWhoPage() {
     <main className="flex flex-col min-h-screen transition-colors duration-500 relative bg-[#1e293b]">
       <div className="absolute inset-0 pointer-events-none opacity-[0.2]" style={{ backgroundImage: 'radial-gradient(#000000 1px, transparent 1px)', backgroundSize: '16px 16px' }}></div>
 
-      {phase === "playing" ? (
+      {localPhase === "playing" ? (
         <div className="flex-1 flex flex-col justify-between w-full h-[100dvh] overflow-hidden py-4 px-2 z-10">
             <div className="w-full flex flex-col items-center gap-2 mt-4 relative">
                 <div className="bg-red-600/20 border border-red-500/50 px-6 py-2 rounded-xl backdrop-blur-sm shadow-[0_10px_30px_rgba(220,38,38,0.3)]">
@@ -230,7 +231,7 @@ export default function GuessWhoPage() {
         </div>
       ) : (
         <div className="p-5 animate-in fade-in duration-500 flex flex-col h-full items-center justify-center relative z-10 w-full max-w-md mx-auto">
-            {phase !== "finalResult" && (
+            {localPhase !== "finalResult" && (
             <div className="absolute top-5 left-5">
                 <Link href="/games" className="bg-card px-3 py-1.5 rounded-lg border border-primary/20 text-primary hover:bg-primary hover:text-background transition-all flex items-center gap-2 text-xs font-bold shadow-sm">
                   <span>←</span> Oyunlar
@@ -238,7 +239,7 @@ export default function GuessWhoPage() {
             </div>
             )}
 
-            {phase === "modeSelect" && (
+            {localPhase === "modeSelect" && (
                 <div className="flex flex-col items-center justify-center gap-8 w-full mt-10">
                   <div className="text-center mb-2">
                     <div className="text-7xl drop-shadow-xl mb-4 animate-bounce">🕵️‍♂️</div>
@@ -251,7 +252,7 @@ export default function GuessWhoPage() {
                 </div>
             )}
 
-            {phase === "settings" && (
+            {localPhase === "settings" && (
                 <div className="flex flex-col gap-6 w-full mt-10 relative">
                   
                   {isEmircan && (
@@ -286,7 +287,7 @@ export default function GuessWhoPage() {
                 </div>
             )}
 
-            {phase === "finalResult" && (
+            {localPhase === "finalResult" && (
                 <div className="flex flex-col items-center justify-center gap-6 w-full mt-20 text-center">
                   <div className="text-7xl drop-shadow-lg">👑</div>
                   <h2 className="display-font text-4xl text-white mb-2 font-black">
