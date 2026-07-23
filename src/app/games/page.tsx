@@ -37,6 +37,12 @@ const GAMES = [
     name: "Uno", 
     icon: "🃏", 
     desc: "Özel 2 kişilik kurallarla, kavga garantili kart düellosu!" 
+  },
+  { 
+    id: "guess-who", 
+    name: "Bil Bakalım Kim?", 
+    icon: "🕵️‍♂️", 
+    desc: "30 şüpheli, tek hedef. Doğru sorularla karakteri ele ve kazan!" 
   }
 ];
 
@@ -62,7 +68,7 @@ export default function GamesPage() {
           <h2 className="display-font text-4xl text-primary tracking-wide">Oyun Odası</h2>
         </div>
 
-        {/* KART SİSTEMİ (Artık 6 oyunumuz var!) */}
+        {/* KART SİSTEMİ (Artık 7 oyunumuz var!) */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full">
           {GAMES.map((game) => (
             <Link 
