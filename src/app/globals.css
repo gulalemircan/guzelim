@@ -26,10 +26,10 @@
 
 /* TEMA 3: Nostalji / Trip (Lemon Chiffon & Milano Red) */
 [data-theme='retro'] {
-  --background: #FFFBD4; /* Lemon Chiffon */
-  --text: #300602; /* Milano Red'in çok koyu, okunabilir hali */
-  --primary: #A90E02; /* Milano Red */
-  --card: #f5f1c6; /* Zemin renginden bir tık daha tok bir krem */
+  --background: #F4EED3; /* Koyu, tok bir retro krem (Arka plan) */
+  --card: #FFFFFF; /* Kartlar bembeyaz olsun ki arka plandan kopsun */
+  --text: #2b0710; /* Yazılar koyu bordo/siyah (Okunabilirlik için) */
+  --primary: #A90E02; /* Milano Red (Başlıklar ve vurgular için) */
 }
 
 body {
