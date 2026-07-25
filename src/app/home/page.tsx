@@ -26,12 +26,10 @@ const MOODS = [
 export default function HomePage() {
   const [isClient, setIsClient] = useState(false);
   
-  // Kimlik ve Ruh Hali State'leri
   const [currentUser, setCurrentUser] = useState<string | null>(null);
   const [efsunMood, setEfsunMood] = useState({ emoji: "🥰", text: "Çok Mutlu" });
   const [showMoodModal, setShowMoodModal] = useState(false);
   
-  // Sayaç State'leri
   const [relDays, setRelDays] = useState(0);
   const [relHours, setRelHours] = useState(0);
   const [relMinutes, setRelMinutes] = useState(0);
@@ -48,7 +46,6 @@ export default function HomePage() {
     totalMeetDays: 0
   });
 
-  // Hava Durumu State'leri
   const [currentWeather, setCurrentWeather] = useState<{temp: number, code: number} | null>(null);
   const [hourlyForecast, setHourlyForecast] = useState<any[]>([]);
   const [dailyForecast, setDailyForecast] = useState<any[]>([]);
@@ -57,11 +54,9 @@ export default function HomePage() {
   useEffect(() => {
     setIsClient(true);
 
-    // KİMLİK KONTROLÜ (Giriş ekranında atadığın "myName" çekilir)
     const storedUser = localStorage.getItem('myName');
     setCurrentUser(storedUser);
 
-    // RUH HALİNİ İLK AÇILIŞTA ÇEK
     const fetchMood = async () => {
       const { data } = await supabase.from('efsun_mood').select('*').eq('id', 1).single();
       if (data) {
@@ -72,7 +67,6 @@ export default function HomePage() {
     };
     fetchMood();
 
-    // CANLI (REALTIME) BAĞLANTI: Sayfayı yenilemeden güncellemek için
     const moodSubscription = supabase
       .channel('efsun_mood_changes')
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'efsun_mood' }, (payload) => {
@@ -82,7 +76,6 @@ export default function HomePage() {
       })
       .subscribe();
 
-    // SAYAÇLAR
     const relationStartDate = new Date("2026-01-13T00:00:00").getTime(); 
     const meetStartDate = new Date("2025-12-07T00:00:00").getTime();
 
@@ -198,7 +191,7 @@ export default function HomePage() {
   if (!isClient) return <div className="min-h-screen bg-background"></div>;
 
   return (
-    <main className="min-h-screen flex flex-col items-center font-sans px-4 md:px-8 py-10 bg-background relative">
+    <main className="min-h-screen flex flex-col items-center font-sans px-4 md:px-8 py-10 bg-background relative transition-colors duration-500">
 
       {/* RUH HALİ DEĞİŞTİRME EKRANI (SADECE EFSUN AÇABİLİR) */}
       {showMoodModal && (
@@ -213,13 +206,13 @@ export default function HomePage() {
                   className="bg-background border border-primary/20 py-4 rounded-xl flex flex-col items-center justify-center gap-2 hover:border-primary hover:bg-primary/10 transition-all shadow-sm"
                 >
                   <span className="text-3xl">{m.emoji}</span>
-                  <span className="text-white text-[11px] uppercase tracking-widest font-bold">{m.text}</span>
+                  <span className="text-text text-[11px] uppercase tracking-widest font-bold">{m.text}</span>
                 </button>
               ))}
             </div>
             <button 
               onClick={() => setShowMoodModal(false)}
-              className="mt-6 w-full py-3 text-text/50 font-bold hover:text-white transition-colors"
+              className="mt-6 w-full py-3 text-text/50 font-bold hover:text-text transition-colors"
             >
               Vazgeç
             </button>
@@ -251,19 +244,19 @@ export default function HomePage() {
           <h2 className="text-primary text-xs font-bold tracking-[2px] uppercase mb-4">TANIŞTIĞIMIZ ZAMAN</h2>
           <div className="w-full bg-card border border-primary/20 rounded-3xl flex flex-col md:flex-row shadow-lg overflow-hidden divide-y md:divide-y-0 md:divide-x divide-primary/20">
             <div className="flex-1 py-8 flex flex-col items-center justify-center">
-              <span className="text-white text-4xl font-light mb-2">{meetDays}</span>
+              <span className="text-text text-4xl font-light mb-2">{meetDays}</span>
               <span className="text-primary/80 text-[10px] font-bold tracking-widest uppercase">GÜN</span>
             </div>
             <div className="flex-1 py-8 flex flex-col items-center justify-center">
-              <span className="text-white text-4xl font-light mb-2">{meetHours}</span>
+              <span className="text-text text-4xl font-light mb-2">{meetHours}</span>
               <span className="text-primary/80 text-[10px] font-bold tracking-widest uppercase">SAAT</span>
             </div>
             <div className="flex-1 py-8 flex flex-col items-center justify-center">
-              <span className="text-white text-4xl font-light mb-2">{meetMinutes}</span>
+              <span className="text-text text-4xl font-light mb-2">{meetMinutes}</span>
               <span className="text-primary/80 text-[10px] font-bold tracking-widest uppercase">DAK</span>
             </div>
             <div className="flex-1 py-8 flex flex-col items-center justify-center">
-              <span className="text-white text-4xl font-light mb-2">{meetSeconds}</span>
+              <span className="text-text text-4xl font-light mb-2">{meetSeconds}</span>
               <span className="text-primary/80 text-[10px] font-bold tracking-widest uppercase">SANİYE</span>
             </div>
           </div>
@@ -274,19 +267,19 @@ export default function HomePage() {
           <h2 className="text-primary text-xs font-bold tracking-[2px] uppercase mb-4">SEVGİLİ OLDUĞUMUZ ZAMAN</h2>
           <div className="w-full bg-card border border-primary/20 rounded-3xl flex flex-col md:flex-row shadow-lg overflow-hidden divide-y md:divide-y-0 md:divide-x divide-primary/20">
             <div className="flex-1 py-8 flex flex-col items-center justify-center">
-              <span className="text-white text-4xl font-light mb-2">{relDays}</span>
+              <span className="text-text text-4xl font-light mb-2">{relDays}</span>
               <span className="text-primary/80 text-[10px] font-bold tracking-widest uppercase">GÜN</span>
             </div>
             <div className="flex-1 py-8 flex flex-col items-center justify-center">
-              <span className="text-white text-4xl font-light mb-2">{relHours}</span>
+              <span className="text-text text-4xl font-light mb-2">{relHours}</span>
               <span className="text-primary/80 text-[10px] font-bold tracking-widest uppercase">SAAT</span>
             </div>
             <div className="flex-1 py-8 flex flex-col items-center justify-center">
-              <span className="text-white text-4xl font-light mb-2">{relMinutes}</span>
+              <span className="text-text text-4xl font-light mb-2">{relMinutes}</span>
               <span className="text-primary/80 text-[10px] font-bold tracking-widest uppercase">DAK</span>
             </div>
             <div className="flex-1 py-8 flex flex-col items-center justify-center">
-              <span className="text-white text-4xl font-light mb-2">{relSeconds}</span>
+              <span className="text-text text-4xl font-light mb-2">{relSeconds}</span>
               <span className="text-primary/80 text-[10px] font-bold tracking-widest uppercase">SANİYE</span>
             </div>
           </div>
@@ -301,24 +294,24 @@ export default function HomePage() {
             <div className="w-full bg-card border border-primary/20 rounded-3xl flex flex-col md:flex-row shadow-lg overflow-hidden divide-y md:divide-y-0 md:divide-x divide-primary/20 h-full">
               {annivData.isRelToday ? (
                 <div className="flex-1 py-6 flex items-center justify-center">
-                  <span className="text-white text-4xl font-light animate-pulse">BUGÜN 🎉</span>
+                  <span className="text-text text-4xl font-light animate-pulse">BUGÜN 🎉</span>
                 </div>
               ) : (
                 <>
                   <div className="flex-1 py-6 flex flex-col items-center justify-center">
-                    <span className="text-white text-4xl font-light mb-2">{annivData.relCd.d}</span>
+                    <span className="text-text text-4xl font-light mb-2">{annivData.relCd.d}</span>
                     <span className="text-primary/80 text-[10px] font-bold tracking-widest uppercase">GÜN</span>
                   </div>
                   <div className="flex-1 py-6 flex flex-col items-center justify-center">
-                    <span className="text-white text-4xl font-light mb-2">{annivData.relCd.h}</span>
+                    <span className="text-text text-4xl font-light mb-2">{annivData.relCd.h}</span>
                     <span className="text-primary/80 text-[10px] font-bold tracking-widest uppercase">SAAT</span>
                   </div>
                   <div className="flex-1 py-6 flex flex-col items-center justify-center">
-                    <span className="text-white text-4xl font-light mb-2">{annivData.relCd.m}</span>
+                    <span className="text-text text-4xl font-light mb-2">{annivData.relCd.m}</span>
                     <span className="text-primary/80 text-[10px] font-bold tracking-widest uppercase">DAK</span>
                   </div>
                   <div className="flex-1 py-6 flex flex-col items-center justify-center">
-                    <span className="text-white text-4xl font-light mb-2">{annivData.relCd.s}</span>
+                    <span className="text-text text-4xl font-light mb-2">{annivData.relCd.s}</span>
                     <span className="text-primary/80 text-[10px] font-bold tracking-widest uppercase">SAN</span>
                   </div>
                 </>
@@ -333,24 +326,24 @@ export default function HomePage() {
             <div className="w-full bg-card border border-primary/20 rounded-3xl flex flex-col md:flex-row shadow-lg overflow-hidden divide-y md:divide-y-0 md:divide-x divide-primary/20 h-full">
               {annivData.isMeetToday ? (
                 <div className="flex-1 py-6 flex items-center justify-center">
-                  <span className="text-white text-4xl font-light animate-pulse">BUGÜN 🥂</span>
+                  <span className="text-text text-4xl font-light animate-pulse">BUGÜN 🥂</span>
                 </div>
               ) : (
                 <>
                   <div className="flex-1 py-6 flex flex-col items-center justify-center">
-                    <span className="text-white text-4xl font-light mb-2">{annivData.meetCd.d}</span>
+                    <span className="text-text text-4xl font-light mb-2">{annivData.meetCd.d}</span>
                     <span className="text-primary/80 text-[10px] font-bold tracking-widest uppercase">GÜN</span>
                   </div>
                   <div className="flex-1 py-6 flex flex-col items-center justify-center">
-                    <span className="text-white text-4xl font-light mb-2">{annivData.meetCd.h}</span>
+                    <span className="text-text text-4xl font-light mb-2">{annivData.meetCd.h}</span>
                     <span className="text-primary/80 text-[10px] font-bold tracking-widest uppercase">SAAT</span>
                   </div>
                   <div className="flex-1 py-6 flex flex-col items-center justify-center">
-                    <span className="text-white text-4xl font-light mb-2">{annivData.meetCd.m}</span>
+                    <span className="text-text text-4xl font-light mb-2">{annivData.meetCd.m}</span>
                     <span className="text-primary/80 text-[10px] font-bold tracking-widest uppercase">DAK</span>
                   </div>
                   <div className="flex-1 py-6 flex flex-col items-center justify-center">
-                    <span className="text-white text-4xl font-light mb-2">{annivData.meetCd.s}</span>
+                    <span className="text-text text-4xl font-light mb-2">{annivData.meetCd.s}</span>
                     <span className="text-primary/80 text-[10px] font-bold tracking-widest uppercase">SAN</span>
                   </div>
                 </>
@@ -373,7 +366,7 @@ export default function HomePage() {
             <h2 className="text-primary text-xl font-medium mb-2">Efsun Şuan Nasıl?</h2>
             <div className="flex items-center gap-4 mt-2">
               <span className="text-4xl animate-heartbeat origin-center">{efsunMood.emoji}</span>
-              <span className="text-white font-bold text-[17px]">{efsunMood.text}</span>
+              <span className="text-text font-bold text-[17px]">{efsunMood.text}</span>
             </div>
           </div>
           {currentUser === "Efsun" && (
@@ -392,7 +385,7 @@ export default function HomePage() {
               </div>
               <div className="flex flex-col">
                 <div className="flex items-baseline gap-3">
-                  <span className="text-white text-6xl font-black">{Math.round(currentWeather.temp)}°</span>
+                  <span className="text-text text-6xl font-black">{Math.round(currentWeather.temp)}°</span>
                 </div>
                 <span className="text-primary/80 text-lg font-medium tracking-wide">
                   {getWeatherDetails(currentWeather.code).condition}
@@ -408,7 +401,7 @@ export default function HomePage() {
                     <div key={index} className="flex flex-col items-center gap-2">
                       <span className="text-primary/80 text-xs">{hour.time}</span>
                       <span className="text-2xl">{getWeatherDetails(hour.code).icon}</span>
-                      <span className="text-white font-bold text-sm">{hour.temp}°</span>
+                      <span className="text-text font-bold text-sm">{hour.temp}°</span>
                     </div>
                   ))}
                 </div>
@@ -422,8 +415,8 @@ export default function HomePage() {
                       <span className="text-primary/80 text-xs">{day.day}</span>
                       <span className="text-2xl">{getWeatherDetails(day.code).icon}</span>
                       <div className="flex gap-1 text-xs font-bold">
-                        <span className="text-white">{day.max}°</span>
-                        <span className="text-white/40">{day.min}°</span>
+                        <span className="text-text">{day.max}°</span>
+                        <span className="text-text/40">{day.min}°</span>
                       </div>
                     </div>
                   ))}
