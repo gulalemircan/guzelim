@@ -26,7 +26,7 @@
 /* TEMA 3: Nostalji / Trip (Lemon Chiffon & Milano Red) */
 [data-theme='retro'] {
   --background: #F4EED3; 
-  --card: #FFFFFF; 
+  --card: #EAD8A6; /* Sırıtan beyazlık yerine nostaljik tok krem */
   --text: #300602; 
   --primary: #A90E02; 
 }
