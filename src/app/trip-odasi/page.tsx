@@ -15,14 +15,20 @@ export default function TripRoomPage() {
   const [spotifyUrl, setSpotifyUrl] = useState<string>("");
   const [reels, setReels] = useState<ReelNote[]>([]);
   
+  // Güvercin & Not Stateleri
+  const [pigeonActive, setPigeonActive] = useState(false);
+  const [activeNote, setActiveNote] = useState("");
+  const [isWritingNote, setIsWritingNote] = useState(false);
+  const [isReadingNote, setIsReadingNote] = useState(false);
+  const [noteInput, setNoteInput] = useState("");
+
   // Input Stateleri
   const [newSpotify, setNewSpotify] = useState("");
   const [newReelUrl, setNewReelUrl] = useState("");
   const [newReelNote, setNewReelNote] = useState("");
-
   const [confirmTrash, setConfirmTrash] = useState(false);
   
-  // Masa Objeleri İçi Etkileşimler
+  // Masa Objeleri
   const [bunnyBounce, setBunnyBounce] = useState(false);
   const [coffeeClickCount, setCoffeeClickCount] = useState(0);
 
@@ -39,6 +45,8 @@ export default function TripRoomPage() {
           setRoomMode(payload.new.mode);
           setSpotifyUrl(payload.new.spotify_url || "");
           setReels(payload.new.reels || []);
+          setPigeonActive(payload.new.pigeon_active || false);
+          setActiveNote(payload.new.active_note || "");
         }
       })
       .subscribe();
@@ -52,8 +60,10 @@ export default function TripRoomPage() {
       setRoomMode(data.mode || "trip");
       setSpotifyUrl(data.spotify_url || "");
       setReels(data.reels || []);
+      setPigeonActive(data.pigeon_active || false);
+      setActiveNote(data.active_note || "");
     } else {
-      const defaultState = { id: 1, mode: "trip", spotify_url: "", reels: [] };
+      const defaultState = { id: 1, mode: "trip", spotify_url: "", reels: [], pigeon_active: false, active_note: "" };
       await supabase.from('trip_room').upsert([defaultState]);
     }
     setIsLoading(false);
@@ -106,6 +116,29 @@ export default function TripRoomPage() {
     setCoffeeClickCount(prev => prev + 1);
   };
 
+  // Güvercin Gönderme (Emircan)
+  const sendPigeon = () => {
+    if (!noteInput.trim()) return;
+    playSound("success");
+    setIsWritingNote(false);
+    updateRoomState({
+      pigeon_active: true,
+      active_note: noteInput
+    });
+    setNoteInput("");
+  };
+
+  // Güvercini Karşılama ve Barışma (Efsun)
+  const acceptPeace = () => {
+    playSound("success");
+    setIsReadingNote(false);
+    updateRoomState({
+      mode: "peace",
+      pigeon_active: false,
+      active_note: ""
+    });
+  };
+
   // Spotify embed linkini güvenli hale getirme
   const getEmbedUrl = (url: string) => {
     if (url.includes('spotify.com')) {
@@ -125,6 +158,59 @@ export default function TripRoomPage() {
   return (
     <main className={`min-h-screen w-full flex flex-col relative overflow-hidden transition-colors duration-1000 ${roomMode === 'trip' ? 'bg-[#0f172a]' : 'bg-[#F4EED3]'}`}>
       
+      {/* 🕊️ PENCEREDEN UÇUP GELEN GÜVERCİN (Efsun için) */}
+      {pigeonActive && (
+         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in">
+            <div className="relative flex flex-col items-center animate-bounce cursor-pointer" onClick={() => setIsReadingNote(true)}>
+               <div className="text-8xl filter drop-shadow-[0_10px_15px_rgba(0,0,0,0.5)]">🕊️</div>
+               <div className="bg-white text-black px-6 py-3 rounded-2xl shadow-2xl font-bold mt-4 border-2 border-primary animate-pulse text-center">
+                  ✨ Emircan'dan bir güvercin mektup getirdi! Tıkla ve oku.
+               </div>
+            </div>
+         </div>
+      )}
+
+      {/* 📜 MEKTUP OKUMA MODALI (Efsun) */}
+      {isReadingNote && (
+         <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/80 p-4 animate-in zoom-in-95">
+            <div className="bg-[#FDFBF7] max-w-md w-full p-8 rounded-sm shadow-2xl relative border-4 border-[#8B0000]/20">
+               <div className="absolute top-4 left-4 text-6xl text-[#8B0000]/10 font-serif">"</div>
+               <h3 className="text-center font-serif text-[#8B0000] font-bold text-lg mb-4 uppercase tracking-widest border-b pb-2">Gönül Alma Mektubu</h3>
+               <p className="text-[#3E2723] font-serif text-base leading-relaxed whitespace-pre-wrap relative z-10 my-4">
+                  {activeNote}
+               </p>
+               <div className="mt-8 flex gap-3">
+                  <button onClick={() => setIsReadingNote(false)} className="flex-1 bg-gray-300 text-gray-700 py-3 rounded-xl font-bold text-xs uppercase">
+                     Hâlâ Tripteyim 😤
+                  </button>
+                  <button onClick={acceptPeace} className="flex-1 bg-green-600 text-white py-3 rounded-xl font-black text-xs uppercase tracking-widest shadow-lg hover:bg-green-700">
+                     Affettim 🤍 (Barış)
+                  </button>
+               </div>
+            </div>
+         </div>
+      )}
+
+      {/* 💌 NOT YAZMA MODALI (Emircan) */}
+      {isWritingNote && (
+         <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/80 p-4 animate-in zoom-in-95">
+            <div className="bg-card max-w-md w-full p-6 rounded-3xl border border-primary/30 shadow-2xl flex flex-col gap-4">
+               <h3 className="display-font text-2xl text-primary text-center">Güvercine Mektup Ver</h3>
+               <p className="text-xs text-text/60 text-center font-medium">Efsun'un odasına uçup gidecek olan gönül alma notunu yaz:</p>
+               <textarea 
+                  value={noteInput} 
+                  onChange={(e) => setNoteInput(e.target.value)} 
+                  placeholder="Özür dilerim prenses..." 
+                  className="w-full bg-background border border-primary/20 text-text rounded-xl p-4 h-36 outline-none resize-none font-serif text-sm"
+               ></textarea>
+               <div className="flex gap-2">
+                  <button onClick={() => setIsWritingNote(false)} className="flex-1 py-3 border border-primary/20 rounded-xl text-text/70 font-bold text-xs">Vazgeç</button>
+                  <button onClick={sendPigeon} className="flex-1 py-3 bg-primary text-background rounded-xl font-bold text-xs shadow-lg uppercase tracking-widest">Güvercini Sal 🕊️</button>
+               </div>
+            </div>
+         </div>
+      )}
+
       {/* Üst Kısım: Çıkış ve Mod Göstergesi */}
       <div className="absolute top-5 left-5 right-5 flex justify-between z-50">
         <Link href="/home" onClick={() => playSound("click")} className={`px-4 py-2 rounded-xl font-bold transition-all shadow-lg backdrop-blur-md ${roomMode === 'trip' ? 'bg-white/10 text-white hover:bg-white/20 border-white/20' : 'bg-card text-primary border-primary/20 hover:border-primary/50'} border`}>
@@ -151,7 +237,7 @@ export default function TripRoomPage() {
          )}
       </div>
 
-      {/* 3D ODA İSKELETİ (Perspective Container) */}
+      {/* 3D ODA İSKELETİ */}
       <div className="flex-1 flex flex-col items-center justify-center perspective-[1200px] pt-16 pb-10 overflow-x-hidden">
         
         <div className="flex items-center justify-center w-full">
@@ -159,7 +245,6 @@ export default function TripRoomPage() {
           <div className="w-[300px] hidden lg:flex flex-col shrink-0 mr-8 transition-transform duration-700 ease-out z-20 group" style={{ transform: 'rotateY(15deg) translateZ(-50px)' }}>
               <div className={`w-full rounded-2xl border-[8px] shadow-2xl p-4 transition-colors duration-1000 relative ${roomMode === 'trip' ? 'border-[#1e293b] bg-[#0f172a] shadow-black/50' : 'border-[#8B0000] bg-card shadow-[#8B0000]/20'}`}>
                  
-                 {/* Neon Tabela */}
                  <div className="absolute -top-12 left-1/2 -translate-x-1/2 w-48 text-center">
                     <h3 className={`font-black uppercase tracking-widest text-sm transition-colors duration-1000 drop-shadow-[0_0_10px_currentColor] ${roomMode === 'trip' ? 'text-red-500' : 'text-pink-500'}`}>
                       {roomMode === 'trip' ? "Dinle ve Düşün" : "Bugünün Şarkısı"}
@@ -194,12 +279,10 @@ export default function TripRoomPage() {
           {/* ORTA DUVAR: Pencere */}
           <div className="w-[320px] md:w-[400px] h-[450px] shrink-0 border-[16px] rounded-t-full shadow-2xl relative overflow-hidden transition-all duration-1000 z-10" style={{ transform: 'translateZ(-150px)', borderColor: roomMode === 'trip' ? '#1e293b' : '#ffffff' }}>
               
-              {/* Pencere Camı (Görüntü) */}
               <div className={`absolute inset-0 transition-opacity duration-1000 ${roomMode === 'trip' ? 'opacity-100' : 'opacity-0'}`}>
                  <img src="https://images.unsplash.com/photo-1515694346937-94d85e41e6f0?q=80&w=1000&auto=format&fit=crop" alt="Rainy Window" className="w-full h-full object-cover blur-[2px] brightness-50" />
-                 {/* Buğu Efekti Katmanı */}
                  <div className="absolute inset-0 bg-white/10 backdrop-blur-[3px] flex items-center justify-center pointer-events-none">
-                    <span className="text-white/30 text-[10px] tracking-[4px] uppercase font-bold">Buğulu Cam (Dokun sil)</span>
+                    <span className="text-white/30 text-[10px] tracking-[4px] uppercase font-bold">Buğulu Cam</span>
                  </div>
               </div>
               
@@ -207,7 +290,6 @@ export default function TripRoomPage() {
                  <img src="https://images.unsplash.com/photo-1590419690008-905895e8fd0d?q=80&w=1000&auto=format&fit=crop" alt="Sunny Window" className="w-full h-full object-cover brightness-110" />
               </div>
 
-              {/* Pencere Pervazı (Orta Çizgiler) */}
               <div className={`absolute left-1/2 top-0 bottom-0 w-2 -translate-x-1/2 transition-colors duration-1000 ${roomMode === 'trip' ? 'bg-[#1e293b]' : 'bg-white'}`}></div>
               <div className={`absolute top-[60%] left-0 right-0 h-2 -translate-y-1/2 transition-colors duration-1000 ${roomMode === 'trip' ? 'bg-[#1e293b]' : 'bg-white'}`}></div>
           </div>
@@ -215,7 +297,6 @@ export default function TripRoomPage() {
           {/* SAĞ DUVAR: Mantar Pano ve Çöp Kutusu */}
           <div className="w-[300px] hidden lg:flex flex-col shrink-0 ml-8 transition-transform duration-700 ease-out z-20" style={{ transform: 'rotateY(-15deg) translateZ(-50px)' }}>
               
-              {/* Mantar Pano */}
               <div className="w-full h-[360px] bg-[#D4A373] border-[10px] border-[#8B5A2B] rounded-lg shadow-2xl relative p-4 overflow-y-auto custom-scrollbar">
                  <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cork-board.png')] opacity-60 pointer-events-none"></div>
                  
@@ -236,7 +317,6 @@ export default function TripRoomPage() {
                  )}
               </div>
 
-              {/* Pano Ekleme & Çöp Kutusu */}
               <div className="mt-3 w-full flex flex-col items-center gap-2">
                  {currentUser === "Efsun" && (
                    <div className={`w-full p-2.5 rounded-xl border backdrop-blur-sm transition-colors ${roomMode === 'trip' ? 'bg-white/5 border-white/10' : 'bg-card/50 border-primary/20'}`}>
@@ -269,7 +349,7 @@ export default function TripRoomPage() {
           </div>
         </div>
 
-        {/* 🪑 PENCERE ÖNÜ AHŞAP MASA VE YAŞAYAN OBJELER */}
+        {/* MASA VE YAŞAYAN OBJELER */}
         <div className="w-full max-w-2xl h-24 bg-[#5C4033] border-t-8 border-[#3E2723] rounded-t-2xl shadow-2xl relative mx-auto mt-4 flex items-center justify-around px-8 z-30">
             
             {/* 1. Stres Tavşanı 🐰 */}
@@ -297,7 +377,7 @@ export default function TripRoomPage() {
                </span>
             </div>
 
-            {/* 4. Fotoğraf Çerçevesi 🖼️ (Tripteyken Yüzüstü, Barışınca Açık) */}
+            {/* 4. Fotoğraf Çerçevesi 🖼️ */}
             <div className="flex flex-col items-center">
                <div className={`w-12 h-10 bg-[#8B5A2B] border-2 border-[#3E2723] rounded-md flex items-center justify-center shadow-lg transition-all duration-700 ${roomMode === 'trip' ? 'rotate-x-90 opacity-40 scale-95' : 'rotate-x-0 scale-100 bg-white p-1'}`}>
                   {roomMode === 'peace' ? (
@@ -308,6 +388,15 @@ export default function TripRoomPage() {
                </div>
                <span className="text-[9px] text-white/70 font-bold uppercase tracking-wider bg-black/30 px-1.5 py-0.5 rounded-full mt-1">Anı Çerçevesi</span>
             </div>
+
+            {/* 🕊️ EMİRCAN İÇİN GÖNÜL ALMA (GÜVERCİN GÖNDER) BUTONU */}
+            {currentUser === "Emircan" && roomMode === "trip" && !pigeonActive && (
+               <div className="absolute -top-12 left-1/2 -translate-x-1/2">
+                  <button onClick={() => setIsWritingNote(true)} className="bg-primary text-background px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest shadow-xl hover:scale-105 transition-transform flex items-center gap-2 border border-background/20">
+                     🕊️ Güvercin Sal
+                  </button>
+               </div>
+            )}
 
         </div>
 
