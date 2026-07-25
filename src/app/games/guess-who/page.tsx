@@ -11,7 +11,6 @@ const CHARACTERS = Array.from({ length: 30 }, (_, i) => ({
 
 export default function GuessWhoPage() {
   const [currentUser, setCurrentUser] = useState<string>("Emircan");
-  // YENİ AŞAMA: selectSecret (Karakter Seçim Ekranı)
   const [phase, setPhase] = useState<"modeSelect" | "settings" | "selectSecret" | "playing" | "finalResult">("modeSelect");
   
   const [isOpponentReady, setIsOpponentReady] = useState(false);
@@ -22,9 +21,8 @@ export default function GuessWhoPage() {
   const [mySecretCharacter, setMySecretCharacter] = useState<number | null>(null);
   const [winner, setWinner] = useState<string | null>(null);
 
-  // YENİ MEKANİKLER
-  const [inspectedCard, setInspectedCard] = useState<number | null>(null); // Büyüteç Modu
-  const [isGuessMode, setIsGuessMode] = useState<boolean>(false); // Tahmin Etme Modu
+  const [inspectedCard, setInspectedCard] = useState<number | null>(null);
+  const [isGuessMode, setIsGuessMode] = useState<boolean>(false);
 
   const targetOpponent = currentUser === "Emircan" ? "Efsun" : "Emircan";
   const myPlayerField = currentUser === "Emircan" ? "p1_state" : "p2_state";
@@ -33,7 +31,6 @@ export default function GuessWhoPage() {
   const phaseRef = useRef(phase);
   useEffect(() => { phaseRef.current = phase; }, [phase]);
 
-  // Hızlı yüklenme için fotoğrafları arka planda tarayıcı önbelleğine (cache) al
   useEffect(() => {
     CHARACTERS.forEach(char => {
       const img = new Image();
@@ -64,13 +61,11 @@ export default function GuessWhoPage() {
          setIsGuessMode(false);
       }
 
-      // Seçim Ekranına Geçiş
       if (data.status === 'selecting' && currentPhase === 'settings') {
          setPhase('selectSecret');
          playSound("click");
       }
 
-      // Oyuna Geçiş (İki taraf da seçtikten sonra)
       if (data.status === 'playing') {
         if (currentPhase === 'selectSecret') {
            setPhase('playing');
@@ -163,7 +158,6 @@ export default function GuessWhoPage() {
     }).eq('id', 1);
   };
 
-  // GİZLİ KARAKTER SEÇME FONKSİYONU
   const handleSelectSecret = async (index: number) => {
     playSound("click");
     setMySecretCharacter(index);
@@ -174,34 +168,28 @@ export default function GuessWhoPage() {
         
         await supabase.from('multiplayer_state').update({
             [myPlayerField]: { ...data[myPlayerField], secret: index, secretSelected: true },
-            // Eğer diğer oyuncu da daha önce seçtiyse, benim seçimimle birlikte oyunu "playing" (başladı) yap!
             ...(isOpponentSelected ? { status: 'playing' } : {}) 
         }).eq('id', 1);
     }
   };
 
-  // KART TIKLAMA YÖNETİCİSİ (Tahmin vs Kapatma)
   const handleCardClick = async (index: number) => {
     if (myFlippedCards[index]) return;
 
     if (isGuessMode) {
-       // TAHMİN ETME MODU
-       setIsGuessMode(false); // İşlem sonrası modu kapat
+       setIsGuessMode(false); 
        const { data } = await supabase.from('multiplayer_state').select('*').eq('id', 1).single();
        if (data) {
            const opponentSecret = data[opPlayerField].secret;
            if (index === opponentSecret) {
-               // DOĞRU TAHMİN! SEN KAZANDIN
                playSound("success");
                await supabase.from('multiplayer_state').update({ status: 'game_over', shared_data: { winner: currentUser } }).eq('id', 1);
            } else {
-               // YANLIŞ TAHMİN! EFSUN KAZANDI (Yanlış bildiğin an kaybedersin)
                playSound("over");
                await supabase.from('multiplayer_state').update({ status: 'game_over', shared_data: { winner: targetOpponent } }).eq('id', 1);
            }
        }
     } else {
-       // NORMAL KART KAPATMA MODU
        playSound("click"); 
        const newFlipped = [...myFlippedCards];
        newFlipped[index] = true;
@@ -238,7 +226,6 @@ export default function GuessWhoPage() {
       <div key={`my_${char.id}`} style={{ perspective: '800px' }} className="w-12 h-16 sm:w-16 sm:h-24 relative cursor-pointer group" onClick={() => handleCardClick(index)}>
         <div 
           className="w-full h-full absolute bottom-0 left-0 transition-transform duration-500 ease-out origin-bottom border-[3px] rounded-lg shadow-xl"
-          // Tahmin modundaysa kartları kırmızı parlat (Hedef göstergesi)
           style={{ 
             borderColor: isGuessMode && !isFlipped ? '#ef4444' : '#2563eb',
             boxShadow: isGuessMode && !isFlipped ? '0 0 15px rgba(239,68,68,0.5)' : '',
@@ -250,7 +237,6 @@ export default function GuessWhoPage() {
              <img src={char.image} alt="character" className="w-full h-full object-cover pointer-events-none" />
              {isFlipped && <div className="absolute inset-0 bg-black/60"></div>}
              
-             {/* BÜYÜTEÇ BUTONU (Kart kapanmamışsa görünür) */}
              {!isFlipped && (
                  <button 
                     onClick={(e) => { e.stopPropagation(); setInspectedCard(index); playSound("click"); }}
@@ -307,6 +293,7 @@ export default function GuessWhoPage() {
         </div>
       )}
 
+      {/* OYUN EKRANI */}
       {phase === "playing" && (
         <div className="flex-1 flex flex-col justify-between w-full h-[100dvh] overflow-hidden py-2 sm:py-4 px-2 z-10">
             {/* EFSUN'UN TAHTASI */}
@@ -361,11 +348,14 @@ export default function GuessWhoPage() {
                 </div>
             </div>
         </div>
-      ) : phase !== "selectSecret" ? (
+      )}
+
+      {/* LOBİ, AYARLAR VE SONUÇ EKRANLARI */}
+      {(phase === "modeSelect" || phase === "settings" || phase === "finalResult") && (
         <div className="p-5 animate-in fade-in duration-500 flex flex-col h-full items-center justify-center relative z-10 w-full max-w-md mx-auto">
             {phase !== "finalResult" && (
             <div className="absolute top-5 left-5">
-                <Link href="/games" className="bg-card px-3 py-1.5 rounded-lg border border-primary/20 text-primary hover:bg-primary hover:text-background transition-all flex items-center gap-2 text-xs font-bold shadow-sm">
+                <Link className="bg-card px-3 py-1.5 rounded-lg border border-primary/20 text-primary hover:bg-primary hover:text-background transition-all flex items-center gap-2 text-xs font-bold shadow-sm" href="/games">
                   <span>←</span> Oyunlar
                 </Link>
             </div>
@@ -386,7 +376,6 @@ export default function GuessWhoPage() {
 
             {phase === "settings" && (
                 <div className="flex flex-col gap-6 w-full mt-10 relative">
-                  
                   <div className="text-center mb-2">
                     <div className="text-5xl mb-2">⚙️</div>
                     <h2 className="display-font text-3xl text-primary">Sorgu Odası</h2>
@@ -431,14 +420,14 @@ export default function GuessWhoPage() {
                     <button onClick={returnToMenu} className="w-full bg-blue-600 border border-blue-400 text-white p-4 rounded-2xl shadow-sm hover:scale-[1.02] transition-all font-bold text-lg">
                       🔄 Yeni Dosya Aç (Lobiye Dön)
                     </button>
-                    <Link href="/games" className="w-full bg-card border border-primary/20 text-text/80 p-4 rounded-2xl shadow-sm hover:border-primary/50 transition-all font-bold text-lg text-center">
+                    <Link className="w-full bg-card border border-primary/20 text-text/80 p-4 rounded-2xl shadow-sm hover:border-primary/50 transition-all font-bold text-lg text-center" href="/games">
                       ⬅️ Oyunlar Menüsü
                     </Link>
                   </div>
                 </div>
             )}
         </div>
-      ) : null}
+      )}
     </main>
   );
 }
