@@ -30,8 +30,8 @@ export default function TripRoomPage() {
 
     const channel = supabase
       .channel('trip_room_sync')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'trip_room', filter: 'id=eq.1' }, (payload) => {
-        if (payload.new) {
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'trip_room', filter: 'id=eq.1' }, (payload: any) => {
+        if (payload.new && Object.keys(payload.new).length > 0) {
           setRoomMode(payload.new.mode);
           setSpotifyUrl(payload.new.spotify_url || "");
           setReels(payload.new.reels || []);
