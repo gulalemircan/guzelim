@@ -1,6 +1,5 @@
 @import "tailwindcss";
 
-/* Yeni Tailwind motoruna kendi renklerimizi tanıtıyoruz */
 @theme {
   --color-background: var(--background);
   --color-text: var(--text);
@@ -26,10 +25,10 @@
 
 /* TEMA 3: Nostalji / Trip (Lemon Chiffon & Milano Red) */
 [data-theme='retro'] {
-  --background: #F2E8C6; /* Tok, eski kağıt rengi (Arka plan) */
-  --card: #FFFBD4;       /* Lemon Chiffon (Kartların asıl rengi) */
-  --text: #2b0710;       /* Yazılar koyu bordo/siyah */
-  --primary: #A90E02;    /* Milano Red (Başlıklar için) */
+  --background: #F4EED3; 
+  --card: #FFFFFF; 
+  --text: #300602; 
+  --primary: #A90E02; 
 }
 
 body {

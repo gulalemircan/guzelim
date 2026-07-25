@@ -22,7 +22,6 @@ export default function MomentsPage() {
   useEffect(() => {
     fetchData();
 
-    // ÇÖZÜM BURADA: Diğer cihazlardan (PC/Telefon) gelen güncellemeleri anında dinleyen canlı telsiz!
     const channel = supabase.channel('realtime-moments')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'watch_list' }, () => fetchData())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'todo_list' }, () => fetchData())
@@ -143,10 +142,10 @@ export default function MomentsPage() {
                 onChange={(e) => setEditingItem({ ...editingItem, text: e.target.value })}
                 onBlur={saveEdit}
                 onKeyDown={(e) => e.key === 'Enter' && saveEdit()}
-                className="flex-1 bg-transparent border-b border-primary text-white outline-none font-medium"
+                className="flex-1 bg-transparent border-b border-primary text-text outline-none font-medium"
               />
             ) : (
-              <span className={`text-sm md:text-base font-medium transition-all ${item.completed ? 'line-through text-text/50' : 'text-white'}`}>
+              <span className={`text-sm md:text-base font-medium transition-all ${item.completed ? 'line-through text-text/50' : 'text-text'}`}>
                 {item.text}
               </span>
             )}
@@ -204,7 +203,7 @@ export default function MomentsPage() {
                 onChange={(e) => setNewWatch(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleAdd('watch')}
                 placeholder="Yeni film/dizi ekle..."
-                className="flex-1 bg-background border border-primary/20 text-white rounded-xl px-4 py-3 outline-none focus:border-primary transition-all text-sm"
+                className="flex-1 bg-background border border-primary/20 text-text rounded-xl px-4 py-3 outline-none focus:border-primary transition-all text-sm placeholder:text-text/40"
               />
               <button 
                 onClick={() => handleAdd('watch')}
@@ -229,7 +228,7 @@ export default function MomentsPage() {
                 onChange={(e) => setNewTodo(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleAdd('todo')}
                 placeholder="Yeni plan ekle..."
-                className="flex-1 bg-background border border-primary/20 text-white rounded-xl px-4 py-3 outline-none focus:border-primary transition-all text-sm"
+                className="flex-1 bg-background border border-primary/20 text-text rounded-xl px-4 py-3 outline-none focus:border-primary transition-all text-sm placeholder:text-text/40"
               />
               <button 
                 onClick={() => handleAdd('todo')}
@@ -295,7 +294,7 @@ export default function MomentsPage() {
                     onChange={(e) => updatePhotoNoteLocal(photo.id, e.target.value)}
                     onBlur={(e) => savePhotoNote(photo.id, e.target.value)}
                     placeholder="Bu fotoğrafın altına bir not düş..."
-                    className="w-full bg-transparent border border-primary/10 rounded-xl p-3 text-sm text-white outline-none focus:border-primary/50 resize-none h-20 transition-colors placeholder:text-white/20"
+                    className="w-full bg-transparent border border-primary/10 rounded-xl p-3 text-sm text-text outline-none focus:border-primary/50 resize-none h-20 transition-colors placeholder:text-text/40"
                   />
                 </div>
               ))}
@@ -308,14 +307,14 @@ export default function MomentsPage() {
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-card border border-primary/30 p-8 rounded-[32px] max-w-sm w-full text-center shadow-2xl animate-in zoom-in-95 duration-200">
             <div className="text-5xl mb-4">⚠️</div>
-            <h3 className="display-font text-2xl text-white mb-2">Emin misin?</h3>
+            <h3 className="display-font text-2xl text-primary mb-2">Emin misin?</h3>
             <p className="text-sm text-text/70 mb-8">
               Bu öğeyi tamamen silmek istediğine emin misin? Bu işlem geri alınamaz.
             </p>
             <div className="flex gap-4 justify-center">
               <button 
                 onClick={() => setConfirmModal({ isOpen: false, type: 'watch', id: null })}
-                className="flex-1 py-3 rounded-xl border border-primary/20 text-white hover:bg-white/5 transition-colors font-bold"
+                className="flex-1 py-3 rounded-xl border border-primary/20 text-text/70 hover:bg-primary/10 transition-colors font-bold"
               >
                 Vazgeç
               </button>

@@ -11,7 +11,6 @@ export default function Navbar() {
   const pathname = usePathname();
 
   useEffect(() => {
-    // Sayfa açıldığında hafızada tema var mı diye bakıyoruz
     const savedTheme = localStorage.getItem("app-theme") as Theme;
     if (savedTheme && ["default", "dark", "retro"].includes(savedTheme)) {
       document.documentElement.setAttribute("data-theme", savedTheme);
@@ -23,7 +22,6 @@ export default function Navbar() {
     const html = document.documentElement;
     let nextTheme: Theme = "default";
     
-    // Üçlü Döngü: Varsayılan -> Gece -> Nostalji -> Varsayılan
     if (theme === "default") nextTheme = "dark";
     else if (theme === "dark") nextTheme = "retro";
     else nextTheme = "default";
@@ -36,7 +34,7 @@ export default function Navbar() {
   const getThemeInfo = () => {
      if (theme === "default") return { name: "Varsayılan", icon: "🍷" };
      if (theme === "dark") return { name: "Gece Modu", icon: "🌙" };
-     return { name: "Nostalji", icon: "📜" }; // Retro temamızın ikonu
+     return { name: "Nostalji", icon: "📜" }; 
   };
 
   const { name: themeName, icon: themeIcon } = getThemeInfo();
@@ -83,7 +81,7 @@ export default function Navbar() {
                 }`}
               >
                 <span className="text-xl">{link.icon}</span>
-                <span className={`font-bold tracking-wide text-sm ${isActive ? 'text-primary' : 'text-text'}`}>
+                <span className={`font-bold tracking-wide text-sm ${isActive ? 'text-primary' : 'text-text opacity-90 hover:opacity-100'}`}>
                   {link.name}
                 </span>
               </Link>

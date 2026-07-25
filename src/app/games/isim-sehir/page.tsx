@@ -37,7 +37,6 @@ export default function IsimSehirPage() {
   const [phase, setPhase] = useState<"modeSelect" | "settings" | "countdown" | "playing" | "waitingRound" | "roundResult" | "finalResult">("modeSelect");
   const [playMode, setPlayMode] = useState<"single" | "multi" | null>(null);
   
-  // YENİ: Bekleme ekranının neden beklediğini bilmesi için
   const [waitingReason, setWaitingReason] = useState<"finish" | "confirm">("finish");
   
   const [isOpponentReady, setIsOpponentReady] = useState(false);
@@ -63,7 +62,6 @@ export default function IsimSehirPage() {
   const [isSaved, setIsSaved] = useState(false);
   const [winSaved, setWinSaved] = useState(false);
 
-  // KALICI BELLEKLER (Ref)
   const phaseRef = useRef(phase);
   const currentRoundRef = useRef(currentRound);
   const settingsRef = useRef(settings);
@@ -128,7 +126,6 @@ export default function IsimSehirPage() {
     }
   }, [phase, isSaved, winSaved, myTotalScore, opponentTotalScore, playMode, currentUser]);
 
-  // YENİ: KUSURSUZ SENKRONİZASYON (Kısır Döngü Kökünden Çözüldü!)
   useEffect(() => {
     if (playMode !== "multi") return;
 
@@ -159,7 +156,6 @@ export default function IsimSehirPage() {
          setIsMeReady(false);
       }
 
-      // KISIR DÖNGÜYÜ ENGELLEYEN YER: Sadece round ilerlediyse veya lobi bittiyse sayaç başlar.
       if (data.status === 'playing') {
          const isNewGame = currentPhase === "settings" || currentPhase === "finalResult";
          const isNextRound = data.shared_data?.round > round;
@@ -180,10 +176,9 @@ export default function IsimSehirPage() {
             setWaitingReason("finish");
             setPhase("countdown");
             playSound("tick");
-            return; // Sayaç tetiklendiyse diğer kontrollere girme
+            return; 
          }
 
-         // İKİ OYUNCU DA CEVAP YAZMAYI BİTİRDİYSE HAKEM MASASINA GEÇ
          if (myState?.roundFinished && opState?.roundFinished) {
             const wReason = waitingReasonRef.current;
             if (currentPhase === 'playing' || (currentPhase === 'waitingRound' && wReason === 'finish')) {
@@ -328,7 +323,6 @@ export default function IsimSehirPage() {
     const initialLetter = getRandomLetter(settingsRef.current.selectedLetters, []);
     const newUsed = [initialLetter];
     
-    // YENİ: Başlarken de veritabanı playing modunda olur
     await supabase.from('multiplayer_state').update({
       status: 'playing',
       shared_data: { settings: { ...settingsRef.current, usedLetters: newUsed }, targetLetter: initialLetter, round: 1 },
@@ -408,7 +402,6 @@ export default function IsimSehirPage() {
     }
   };
 
-  // YENİ: İKİNİZ DE ONAY VERMEDEN ASLA DİĞER TURA GEÇMEZ
   const handleNext = async () => {
     playSound("click");
 
@@ -432,7 +425,6 @@ export default function IsimSehirPage() {
           const myNewState = { ...latestData[playerField], totalScore: newTotal, nextRoundReady: true };
 
           if (opIsReady) {
-              // İKİNİZ DE ONAY VERDİYSENİZ TURA GEÇİLİR!
               if (currentRoundRef.current < settingsRef.current.rounds) {
                   const nextLetter = getRandomLetter(latestData.shared_data.settings.selectedLetters, latestData.shared_data.settings.usedLetters);
                   const newUsed = [...latestData.shared_data.settings.usedLetters, nextLetter];
@@ -450,7 +442,6 @@ export default function IsimSehirPage() {
                   }).eq('id', 1);
               }
           } else {
-              // SADECE SEN ONAY VERDİYSEN VERİTABANINA "BEN HAZIRIM" YAZIP BEKLERSİN
               await supabase.from('multiplayer_state').update({
                  [playerField]: myNewState
               }).eq('id', 1);
@@ -692,7 +683,7 @@ export default function IsimSehirPage() {
         <div className="flex-1 flex flex-col items-center animate-in zoom-in duration-300 w-full max-w-md mx-auto z-10">
           
           <div className="absolute top-0 right-5 z-10 pointer-events-none">
-            <span className="bg-black/30 backdrop-blur-md text-white text-[10px] font-bold tracking-widest px-3 py-1 rounded-b-lg shadow-sm">
+            <span className="bg-card/80 border border-primary/20 backdrop-blur-md text-text text-[10px] font-bold tracking-widest px-3 py-1 rounded-b-lg shadow-sm">
               TUR {currentRound} / {settings.rounds}
             </span>
           </div>
@@ -717,7 +708,7 @@ export default function IsimSehirPage() {
                   value={answers[cat.id] || ""}
                   onChange={(e) => handleInputChange(cat.id, e.target.value)}
                   placeholder={`${targetLetter} ile başlıyor...`}
-                  className="w-full bg-background border border-primary/10 rounded-xl px-4 py-3 text-white font-bold outline-none focus:border-primary/50"
+                  className="w-full bg-background border border-primary/10 rounded-xl px-4 py-3 text-text font-bold outline-none focus:border-primary/50"
                   autoComplete="off"
                 />
               </div>
@@ -730,7 +721,6 @@ export default function IsimSehirPage() {
         </div>
       )}
 
-      {/* YENİ: Bekleme nedenini ekrana yazan akıllı bekleme ekranı */}
       {phase === "waitingRound" && (
         <div className="flex-1 flex flex-col items-center justify-center animate-in zoom-in max-w-sm mx-auto w-full z-10">
           <div className="text-6xl mb-6 animate-spin drop-shadow-xl">⏳</div>
@@ -743,7 +733,6 @@ export default function IsimSehirPage() {
         </div>
       )}
 
-      {/* HAKEM MASASI */}
       {phase === "roundResult" && (
         <div className="flex-1 flex flex-col items-center animate-in slide-in-from-bottom-5 w-full max-w-md mx-auto z-10 pb-10 overflow-y-auto custom-scrollbar">
           <div className="text-xs uppercase tracking-widest text-primary font-bold mb-2 border border-primary/20 px-4 py-1 rounded-full bg-card shadow-sm mt-2">
