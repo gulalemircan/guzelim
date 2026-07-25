@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { playSound } from "@/utils/audio";
 
 type Theme = "default" | "dark" | "retro";
 
@@ -19,6 +20,7 @@ export default function Navbar() {
   }, []);
 
   const toggleTheme = () => {
+    playSound("click");
     const html = document.documentElement;
     let nextTheme: Theme = "default";
     
@@ -39,9 +41,11 @@ export default function Navbar() {
 
   const { name: themeName, icon: themeIcon } = getThemeInfo();
 
+  // YENİ SAYFAMIZ BURAYA EKLENDİ 🚀
   const navLinks = [
     { name: "Ana Sayfa", href: "/home", icon: "🏠" },
     { name: "Oyun Odası", href: "/games", icon: "🎮" },
+    { name: "Trip Odası", href: "/trip-odasi", icon: "⛈️" }, 
     { name: "Sanal Gardırop", href: "/princess", icon: "👗" }, 
     { name: "Rotamız", href: "/memories", icon: "🗺️" }, 
     { name: "Anılar & Planlar", href: "/moments", icon: "📝" },
@@ -50,12 +54,12 @@ export default function Navbar() {
   return (
     <nav className="fixed top-0 left-0 w-full h-16 bg-background/90 backdrop-blur-md border-b border-primary/20 z-50 flex items-center justify-between px-6 transition-all duration-300">
       
-      <Link href="/home" className="display-font text-2xl text-primary tracking-widest hover:scale-105 transition-transform">
+      <Link href="/home" onClick={() => playSound("click")} className="display-font text-2xl text-primary tracking-widest hover:scale-105 transition-transform">
         E & E
       </Link>
 
       <button 
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => { setIsOpen(!isOpen); playSound("click"); }}
         className="text-primary p-2 focus:outline-none hover:scale-110 transition-transform flex flex-col gap-1.5 z-[60]"
       >
         <span className={`block w-6 h-[2px] bg-primary transition-all duration-300 ${isOpen ? 'rotate-45 translate-y-[8px]' : ''}`}></span>
@@ -75,7 +79,7 @@ export default function Navbar() {
               <Link 
                 key={link.href}
                 href={link.href}
-                onClick={() => setIsOpen(false)} 
+                onClick={() => { setIsOpen(false); playSound("click"); }} 
                 className={`flex items-center gap-4 px-6 py-4 transition-colors hover:bg-primary/10 ${
                   isActive ? 'bg-primary/10 border-l-4 border-primary' : 'border-l-4 border-transparent'
                 }`}
