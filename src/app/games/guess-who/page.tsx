@@ -20,11 +20,13 @@ export default function GuessWhoPage() {
   const [opponentFlippedCards, setOpponentFlippedCards] = useState<boolean[]>(Array(30).fill(false));
   
   const [mySecretCharacter, setMySecretCharacter] = useState<number | null>(null);
-  const [isSecretLocked, setIsSecretLocked] = useState<boolean>(false); // YENİ: Seçimi kilitleme durumu
+  const [isSecretLocked, setIsSecretLocked] = useState<boolean>(false); 
 
   const [winner, setWinner] = useState<string | null>(null);
   const [inspectedCard, setInspectedCard] = useState<number | null>(null);
+  
   const [isGuessMode, setIsGuessMode] = useState<boolean>(false);
+  const [pendingGuess, setPendingGuess] = useState<number | null>(null); // YENİ: Emin misin? onayı için
 
   const targetOpponent = currentUser === "Emircan" ? "Efsun" : "Emircan";
   const myPlayerField = currentUser === "Emircan" ? "p1_state" : "p2_state";
@@ -63,6 +65,7 @@ export default function GuessWhoPage() {
          setMyFlippedCards(Array(30).fill(false));
          setOpponentFlippedCards(Array(30).fill(false));
          setIsGuessMode(false);
+         setPendingGuess(null);
       }
 
       if (data.status === 'selecting' && currentPhase === 'settings') {
@@ -164,26 +167,22 @@ export default function GuessWhoPage() {
     }).eq('id', 1);
   };
 
-  // YENİ: Sadece yerel olarak seçer, kilitlenmez
   const handleSelectSecret = (index: number) => {
     if (isSecretLocked) return;
     playSound("click");
     setMySecretCharacter(index);
   };
 
-  // YENİ: Kararını verdiğinde butona basar ve veritabanına kaydeder
   const confirmSecretSelection = async () => {
     if (mySecretCharacter === null) return;
     playSound("success");
-    setIsSecretLocked(true); // Anında kilitli UI
+    setIsSecretLocked(true);
 
     const { data } = await supabase.from('multiplayer_state').select('*').eq('id', 1).single();
     if (data) {
         const isOpponentSelected = data[opPlayerField]?.secretSelected;
-        
         await supabase.from('multiplayer_state').update({
             [myPlayerField]: { ...data[myPlayerField], secret: mySecretCharacter, secretSelected: true },
-            // Diğer oyuncu da seçmişse oyunu başlat
             ...(isOpponentSelected ? { status: 'playing' } : {}) 
         }).eq('id', 1);
     }
@@ -193,19 +192,11 @@ export default function GuessWhoPage() {
     if (myFlippedCards[index]) return;
 
     if (isGuessMode) {
-       setIsGuessMode(false); 
-       const { data } = await supabase.from('multiplayer_state').select('*').eq('id', 1).single();
-       if (data) {
-           const opponentSecret = data[opPlayerField].secret;
-           if (index === opponentSecret) {
-               playSound("success");
-               await supabase.from('multiplayer_state').update({ status: 'game_over', shared_data: { winner: currentUser } }).eq('id', 1);
-           } else {
-               playSound("over");
-               await supabase.from('multiplayer_state').update({ status: 'game_over', shared_data: { winner: targetOpponent } }).eq('id', 1);
-           }
-       }
+       // Tahmin modundaysa direkt bitirme, onay ekranını aç
+       playSound("click");
+       setPendingGuess(index);
     } else {
+       // Normal kapatma modu
        playSound("click"); 
        const newFlipped = [...myFlippedCards];
        newFlipped[index] = true;
@@ -218,6 +209,26 @@ export default function GuessWhoPage() {
     }
   };
 
+  // YENİ: Tahmini Onaylama Fonksiyonu
+  const confirmGuess = async () => {
+    if (pendingGuess === null) return;
+    setIsGuessMode(false); 
+    const guessedIndex = pendingGuess;
+    setPendingGuess(null); // Modalı kapat
+
+    const { data } = await supabase.from('multiplayer_state').select('*').eq('id', 1).single();
+    if (data) {
+        const opponentSecret = data[opPlayerField].secret;
+        if (guessedIndex === opponentSecret) {
+            playSound("success");
+            await supabase.from('multiplayer_state').update({ status: 'game_over', shared_data: { winner: currentUser } }).eq('id', 1);
+        } else {
+            playSound("over");
+            await supabase.from('multiplayer_state').update({ status: 'game_over', shared_data: { winner: targetOpponent } }).eq('id', 1);
+        }
+    }
+  };
+
   useEffect(() => {
     const handleBeforeUnload = () => {
          supabase.from('multiplayer_state').update({ [myPlayerField]: { joined: false, ready: false } }).eq('id', 1).then();
@@ -226,12 +237,12 @@ export default function GuessWhoPage() {
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, [myPlayerField]);
 
+  // MOBİL İÇİN OPTİMİZE EDİLMİŞ KART RENDERLARI
   const renderOpponentCard = (index: number, isFlipped: boolean) => {
     return (
       <div key={`op_${index}`} style={{ perspective: '800px' }} className="w-8 h-12 sm:w-12 sm:h-16 relative">
-        <div className="w-full h-full absolute top-0 left-0 transition-transform duration-500 ease-out origin-bottom border-2 border-red-700 rounded-md bg-red-600 shadow-lg flex items-center justify-center" style={{ transformStyle: 'preserve-3d', transform: isFlipped ? 'rotateX(90deg)' : 'rotateX(-10deg)' }}>
-          <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-30"></div>
-          <span className="text-white font-black text-xs opacity-50">?</span>
+        <div className="w-full h-full absolute top-0 left-0 transition-transform duration-300 ease-out origin-bottom border border-red-700 rounded-md bg-red-600 flex items-center justify-center transform-gpu" style={{ transformStyle: 'preserve-3d', transform: isFlipped ? 'rotateX(90deg)' : 'rotateX(-10deg)' }}>
+          <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-20"></div>
         </div>
       </div>
     );
@@ -241,22 +252,21 @@ export default function GuessWhoPage() {
     return (
       <div key={`my_${char.id}`} style={{ perspective: '800px' }} className="w-12 h-16 sm:w-16 sm:h-24 relative cursor-pointer group" onClick={() => handleCardClick(index)}>
         <div 
-          className="w-full h-full absolute bottom-0 left-0 transition-transform duration-500 ease-out origin-bottom border-[3px] rounded-lg shadow-xl"
+          className="w-full h-full absolute bottom-0 left-0 transition-transform duration-300 ease-out origin-bottom border-2 rounded-lg transform-gpu"
           style={{ 
             borderColor: isGuessMode && !isFlipped ? '#ef4444' : '#2563eb',
-            boxShadow: isGuessMode && !isFlipped ? '0 0 15px rgba(239,68,68,0.5)' : '',
             transformStyle: 'preserve-3d', 
             transform: isFlipped ? 'rotateX(-90deg)' : 'rotateX(15deg)' 
           }}
         >
           <div className="absolute inset-0 bg-blue-100 rounded-md overflow-hidden" style={{ backfaceVisibility: 'hidden' }}>
              <img src={char.image} alt="character" className="w-full h-full object-cover pointer-events-none" />
-             {isFlipped && <div className="absolute inset-0 bg-black/60"></div>}
+             {isFlipped && <div className="absolute inset-0 bg-black/70"></div>}
              
              {!isFlipped && (
                  <button 
                     onClick={(e) => { e.stopPropagation(); setInspectedCard(index); playSound("click"); }}
-                    className="absolute top-1 right-1 w-6 h-6 bg-black/60 backdrop-blur-md rounded-full flex items-center justify-center text-[10px] text-white opacity-0 group-hover:opacity-100 transition-opacity hover:scale-110 border border-white/30"
+                    className="absolute top-1 right-1 w-6 h-6 bg-black/70 rounded-full flex items-center justify-center text-[10px] text-white opacity-0 group-hover:opacity-100 transition-opacity hover:scale-110 border border-white/30"
                  >
                     🔍
                  </button>
@@ -271,9 +281,9 @@ export default function GuessWhoPage() {
     <main className="flex flex-col min-h-screen transition-colors duration-500 relative bg-[#1e293b]">
       <div className="absolute inset-0 pointer-events-none opacity-[0.2]" style={{ backgroundImage: 'radial-gradient(#000000 1px, transparent 1px)', backgroundSize: '16px 16px' }}></div>
 
-      {/* İNCELEME (ZOOM) MODALI - EN ÜST KATMAN */}
+      {/* İNCELEME (ZOOM) MODALI */}
       {inspectedCard !== null && (
-         <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4" onClick={() => setInspectedCard(null)}>
+         <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/80 p-4" onClick={() => setInspectedCard(null)}>
             <div className="relative max-w-sm w-full bg-slate-900 p-2 rounded-2xl border border-white/20 shadow-2xl animate-in zoom-in-95 duration-200">
                <img src={CHARACTERS[inspectedCard].image} alt="inspect" className="w-full h-auto rounded-xl" />
                <p className="text-center text-white/50 text-xs mt-2 uppercase tracking-widest font-bold">Kapatmak için ekrana dokun</p>
@@ -281,26 +291,37 @@ export default function GuessWhoPage() {
          </div>
       )}
 
-      {/* YENİ: EKRANIN EN ÜSTÜNE SABİTLENEN DİKKAT UYARISI */}
-      {isGuessMode && phase === "playing" && (
-         <div className="fixed inset-0 z-[100] flex items-center justify-center pointer-events-none">
-            <div className="bg-red-600/95 backdrop-blur-xl text-white px-8 py-6 rounded-3xl border-2 border-red-400 shadow-[0_0_50px_rgba(239,68,68,0.8)] text-center animate-in zoom-in-95">
-               <p className="font-black uppercase tracking-widest text-3xl drop-shadow-md mb-2">DİKKAT!</p>
-               <p className="text-sm font-bold opacity-90 leading-relaxed">Aşağıdan hedefini seç.<br/>Yanlış bilirsen <span className="underline decoration-2 underline-offset-2">kaybedersin!</span></p>
+      {/* YENİ: TAHMİN ONAY (EMİN MİSİN?) MODALI */}
+      {pendingGuess !== null && (
+         <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/90 p-4 animate-in fade-in">
+            <div className="relative max-w-xs w-full bg-slate-900 p-5 rounded-3xl border border-red-500/50 shadow-[0_0_40px_rgba(239,68,68,0.3)] flex flex-col items-center text-center animate-in zoom-in-95">
+               <h3 className="text-xl font-black text-white uppercase tracking-widest mb-1">Hedefin Bu Mu?</h3>
+               <p className="text-red-400 text-xs font-bold uppercase mb-4">Yanlış bilirsen kaybedersin!</p>
+               
+               <div className="w-32 h-44 rounded-xl overflow-hidden border-4 border-red-500 mb-6 shadow-xl">
+                  <img src={CHARACTERS[pendingGuess].image} alt="guess" className="w-full h-full object-cover" />
+               </div>
+
+               <div className="flex gap-3 w-full">
+                  <button onClick={() => setPendingGuess(null)} className="flex-1 bg-slate-800 text-white py-3 rounded-xl font-bold uppercase text-sm border border-slate-600">
+                     İptal
+                  </button>
+                  <button onClick={confirmGuess} className="flex-1 bg-red-600 text-white py-3 rounded-xl font-black uppercase text-sm border border-red-400 shadow-[0_0_15px_rgba(239,68,68,0.5)]">
+                     EMİNİM!
+                  </button>
+               </div>
             </div>
          </div>
       )}
 
-      {/* KARAKTER SEÇİM EKRANI */}
       {phase === "selectSecret" && (
         <div className="flex-1 flex flex-col items-center py-10 px-4 relative z-10 w-full max-w-4xl mx-auto h-[100dvh] overflow-y-auto">
-           <div className="text-center mb-6 bg-slate-900/80 p-4 rounded-3xl border border-yellow-500/30 shadow-[0_0_30px_rgba(234,179,8,0.15)] sticky top-0 z-20 backdrop-blur-md flex flex-col items-center">
+           <div className="text-center mb-6 bg-slate-900 p-4 rounded-3xl border border-yellow-500/30 shadow-lg sticky top-0 z-20 flex flex-col items-center">
               <h2 className="display-font text-3xl text-yellow-400 font-black tracking-widest mb-1">KİMLİĞİNİ SEÇ</h2>
               <p className="text-white/70 text-xs font-bold uppercase tracking-widest mb-3">
                  {isSecretLocked ? `${targetOpponent}'un seçimi bekleniyor...` : "Oyun boyunca gizleyeceğin karakteri belirle."}
               </p>
               
-              {/* ONAYLA BUTONU */}
               {mySecretCharacter !== null && !isSecretLocked && (
                  <button onClick={confirmSecretSelection} className="bg-green-500 text-white px-6 py-2 rounded-xl font-black tracking-widest uppercase shadow-[0_0_15px_rgba(34,197,94,0.5)] animate-pulse hover:scale-105 border-2 border-green-300 transition-transform">
                     SEÇİMİ ONAYLA
@@ -313,9 +334,9 @@ export default function GuessWhoPage() {
                  <div 
                     key={`sel_${char.id}`} 
                     onClick={() => handleSelectSecret(index)}
-                    className={`w-14 h-20 sm:w-20 sm:h-28 rounded-xl overflow-hidden transition-all duration-300 border-[3px] shadow-lg
-                       ${mySecretCharacter === index ? 'border-green-500 scale-110 shadow-[0_0_20px_rgba(34,197,94,0.6)] z-10 relative' : 
-                         isSecretLocked ? 'border-slate-800 opacity-30 grayscale cursor-not-allowed' : 'border-slate-600 hover:border-yellow-400 hover:scale-105 cursor-pointer'
+                    className={`w-14 h-20 sm:w-20 sm:h-28 rounded-xl overflow-hidden transition-all duration-300 border-[3px] shadow-sm transform-gpu
+                       ${mySecretCharacter === index ? 'border-green-500 scale-110 z-10 relative shadow-[0_0_15px_rgba(34,197,94,0.4)]' : 
+                         isSecretLocked ? 'border-slate-800 opacity-30 grayscale cursor-not-allowed' : 'border-slate-600 hover:border-yellow-400 cursor-pointer'
                        }
                     `}
                  >
@@ -326,12 +347,10 @@ export default function GuessWhoPage() {
         </div>
       )}
 
-      {/* OYUN EKRANI */}
       {phase === "playing" && (
         <div className="flex-1 flex flex-col justify-between w-full h-[100dvh] overflow-hidden py-2 sm:py-4 px-2 z-10">
-            {/* EFSUN'UN TAHTASI */}
             <div className="w-full flex flex-col items-center gap-2 mt-2 sm:mt-4 relative">
-                <div className="bg-red-600/20 border border-red-500/50 px-6 py-2 rounded-xl backdrop-blur-sm shadow-[0_10px_30px_rgba(220,38,38,0.3)]">
+                <div className="bg-red-600/20 border border-red-500/50 px-6 py-2 rounded-xl shadow-sm">
                     <span className="text-red-400 font-black tracking-widest uppercase text-sm">
                         {targetOpponent}'un Tahtası
                     </span>
@@ -341,33 +360,31 @@ export default function GuessWhoPage() {
                 </div>
             </div>
 
-            {/* TAHMİN ET BUTONU */}
             <div className="w-full flex items-center justify-center my-2 relative z-20">
                 <button 
                   onClick={() => setIsGuessMode(!isGuessMode)} 
-                  className={`px-8 py-3 rounded-full font-black uppercase tracking-widest transition-all duration-300 shadow-xl border-4 
-                    ${isGuessMode ? 'bg-red-600 text-white border-red-400 shadow-[0_0_30px_rgba(239,68,68,0.6)] animate-pulse' 
-                                  : 'bg-yellow-500 text-slate-900 border-yellow-300 hover:scale-105 active:scale-95 shadow-[0_0_20px_rgba(234,179,8,0.4)]'
+                  className={`px-8 py-3 rounded-full font-black uppercase tracking-widest transition-all duration-300 border-4 shadow-md
+                    ${isGuessMode ? 'bg-red-600 text-white border-red-400 shadow-[0_0_20px_rgba(239,68,68,0.5)] animate-pulse' 
+                                  : 'bg-yellow-500 text-slate-900 border-yellow-300 active:scale-95'
                     }`}
                 >
                     {isGuessMode ? "❌ İPTAL ET" : "🎯 TAHMİN ET"}
                 </button>
             </div>
 
-            {/* SENİN TAHTAN */}
             <div className="w-full flex flex-col items-center gap-2 mb-2 sm:mb-4 relative z-30">
-                <div className="grid grid-cols-6 gap-2 sm:gap-4 p-3 sm:p-4 bg-blue-900/40 rounded-2xl border-b-4 border-blue-800 shadow-[0_-10px_30px_rgba(37,99,235,0.2)]">
+                <div className="grid grid-cols-6 gap-2 sm:gap-4 p-3 sm:p-4 bg-blue-900/40 rounded-2xl border-b-4 border-blue-800 shadow-inner">
                     {CHARACTERS.map((char, i) => renderMyCard(char, i, myFlippedCards[i]))}
                 </div>
                 
                 <div className="flex items-center justify-between w-full max-w-sm px-4 mt-2">
-                    <span className="bg-blue-600/20 border border-blue-500/50 px-4 py-1 rounded-xl backdrop-blur-sm text-blue-400 font-black tracking-widest uppercase text-xs hidden sm:block">
+                    <span className="bg-blue-600/20 border border-blue-500/50 px-4 py-1 rounded-xl text-blue-400 font-black tracking-widest uppercase text-xs hidden sm:block">
                         Senin Tahtan
                     </span>
-                    <div className="flex items-center gap-3 bg-black/60 border border-white/20 p-2 rounded-xl shadow-2xl ml-auto">
+                    <div className="flex items-center gap-3 bg-black/80 border border-white/20 p-2 rounded-xl shadow-xl ml-auto">
                         <span className="text-white/60 text-[10px] font-bold uppercase tracking-widest text-right leading-tight">Senin<br/>Gizli<br/>Karakterin</span>
-                        <div className="w-10 h-14 sm:w-12 sm:h-16 rounded-md overflow-hidden border-2 border-yellow-400 shadow-[0_0_15px_rgba(250,204,21,0.5)] cursor-pointer hover:scale-110 transition-transform" onClick={() => mySecretCharacter !== null && setInspectedCard(mySecretCharacter)}>
-                           {mySecretCharacter !== null && <img src={CHARACTERS[mySecretCharacter].image} alt="secret" className="w-full h-full object-cover" />}
+                        <div className="w-10 h-14 sm:w-12 sm:h-16 rounded-md overflow-hidden border-2 border-yellow-400 shadow-[0_0_10px_rgba(250,204,21,0.3)] cursor-pointer active:scale-95" onClick={() => mySecretCharacter !== null && setInspectedCard(mySecretCharacter)}>
+                           {mySecretCharacter !== null && <img src={CHARACTERS[mySecretCharacter].image} alt="secret" className="w-full h-full object-cover" /> }
                         </div>
                     </div>
                 </div>
@@ -375,7 +392,6 @@ export default function GuessWhoPage() {
         </div>
       )}
 
-      {/* LOBİ, AYARLAR VE SONUÇ EKRANLARI */}
       {(phase === "modeSelect" || phase === "settings" || phase === "finalResult") && (
         <div className="p-5 animate-in fade-in duration-500 flex flex-col h-full items-center justify-center relative z-10 w-full max-w-md mx-auto">
             {phase !== "finalResult" && (
@@ -409,7 +425,7 @@ export default function GuessWhoPage() {
                       <p className="text-text/60 text-[10px] font-bold tracking-widest uppercase text-center leading-relaxed px-4">
                           Karşı tarafın karakterini bulana kadar sorular sor. Gözlüklü mü? Uçuyor mu? 
                       </p>
-                      <button onClick={toggleReady} className={`w-full py-5 rounded-[24px] font-black text-xl tracking-widest uppercase shadow-2xl transition-all duration-300 ${isMeReady ? 'bg-green-500 text-white' : 'bg-card border-4 border-primary text-primary hover:bg-primary hover:text-background'}`}>
+                      <button onClick={toggleReady} className={`w-full py-5 rounded-[24px] font-black text-xl tracking-widest uppercase shadow-xl transition-all duration-300 ${isMeReady ? 'bg-green-500 text-white' : 'bg-card border-4 border-primary text-primary hover:bg-primary hover:text-background'}`}>
                         {isMeReady ? "👍 HAZIRSIN" : "HAZIRIM"}
                       </button>
                       
