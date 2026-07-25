@@ -9,7 +9,7 @@
 }
 
 /* TEMA 1: Varsayılan (Bordo & Mat Altın) */
-:root {
+:root, [data-theme='default'] {
   --background: #3d0c17;
   --text: #fdf8f5;
   --primary: #d4af37;
@@ -22,6 +22,14 @@
   --text: #ffffff;
   --primary: #ffb6c1;
   --card: #141414;
+}
+
+/* TEMA 3: Nostalji / Trip (Lemon Chiffon & Milano Red) */
+[data-theme='retro'] {
+  --background: #FFFBD4; /* Lemon Chiffon */
+  --text: #300602; /* Milano Red'in çok koyu, okunabilir hali */
+  --primary: #A90E02; /* Milano Red */
+  --card: #f5f1c6; /* Zemin renginden bir tık daha tok bir krem */
 }
 
 body {

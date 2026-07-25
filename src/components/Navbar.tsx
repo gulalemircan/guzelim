@@ -3,32 +3,44 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+type Theme = "default" | "dark" | "retro";
+
 export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
-  const [isDark, setIsDark] = useState(true);
+  const [theme, setTheme] = useState<Theme>("default");
   const pathname = usePathname();
 
   useEffect(() => {
-    const isLight = document.documentElement.classList.contains("light") || document.documentElement.getAttribute("data-theme") === "light";
-    if (isLight) setIsDark(false);
+    // Sayfa açıldığında hafızada tema var mı diye bakıyoruz
+    const savedTheme = localStorage.getItem("app-theme") as Theme;
+    if (savedTheme && ["default", "dark", "retro"].includes(savedTheme)) {
+      document.documentElement.setAttribute("data-theme", savedTheme);
+      setTheme(savedTheme);
+    }
   }, []);
 
   const toggleTheme = () => {
     const html = document.documentElement;
-    if (isDark) {
-      html.classList.remove("dark");
-      html.classList.add("light");
-      html.setAttribute("data-theme", "light");
-      setIsDark(false);
-    } else {
-      html.classList.remove("light");
-      html.classList.add("dark");
-      html.setAttribute("data-theme", "dark");
-      setIsDark(true);
-    }
+    let nextTheme: Theme = "default";
+    
+    // Üçlü Döngü: Varsayılan -> Gece -> Nostalji -> Varsayılan
+    if (theme === "default") nextTheme = "dark";
+    else if (theme === "dark") nextTheme = "retro";
+    else nextTheme = "default";
+
+    html.setAttribute("data-theme", nextTheme);
+    setTheme(nextTheme);
+    localStorage.setItem("app-theme", nextTheme);
   };
 
-  // PLAK ÇALAR BURADAN SİLİNDİ, TERTEMİZ OLDU!
+  const getThemeInfo = () => {
+     if (theme === "default") return { name: "Varsayılan", icon: "🍷" };
+     if (theme === "dark") return { name: "Gece Modu", icon: "🌙" };
+     return { name: "Nostalji", icon: "📜" }; // Retro temamızın ikonu
+  };
+
+  const { name: themeName, icon: themeIcon } = getThemeInfo();
+
   const navLinks = [
     { name: "Ana Sayfa", href: "/home", icon: "🏠" },
     { name: "Oyun Odası", href: "/games", icon: "🎮" },
@@ -71,7 +83,7 @@ export default function Navbar() {
                 }`}
               >
                 <span className="text-xl">{link.icon}</span>
-                <span className={`font-bold tracking-wide text-sm ${isActive ? 'text-primary' : 'text-white'}`}>
+                <span className={`font-bold tracking-wide text-sm ${isActive ? 'text-primary' : 'text-text'}`}>
                   {link.name}
                 </span>
               </Link>
@@ -88,10 +100,10 @@ export default function Navbar() {
             className="w-full flex items-center justify-between bg-card border border-primary/30 p-3 rounded-xl hover:bg-primary/10 transition-colors shadow-sm active:scale-95"
           >
             <span className="text-sm font-bold text-primary uppercase tracking-widest">
-              {isDark ? "Açık Tema" : "Koyu Tema"}
+              {themeName}
             </span>
             <span className="text-2xl drop-shadow-md">
-              {isDark ? "☀️" : "🌙"}
+              {themeIcon}
             </span>
           </button>
         </div>
