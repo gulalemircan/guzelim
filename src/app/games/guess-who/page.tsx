@@ -11,7 +11,8 @@ const CHARACTERS = Array.from({ length: 30 }, (_, i) => ({
 
 export default function GuessWhoPage() {
   const [currentUser, setCurrentUser] = useState<string>("Emircan");
-  const [phase, setPhase] = useState<"modeSelect" | "settings" | "playing" | "finalResult">("modeSelect");
+  // YENİ AŞAMA: selectSecret (Karakter Seçim Ekranı)
+  const [phase, setPhase] = useState<"modeSelect" | "settings" | "selectSecret" | "playing" | "finalResult">("modeSelect");
   
   const [isOpponentReady, setIsOpponentReady] = useState(false);
   const [isMeReady, setIsMeReady] = useState(false);
@@ -21,13 +22,24 @@ export default function GuessWhoPage() {
   const [mySecretCharacter, setMySecretCharacter] = useState<number | null>(null);
   const [winner, setWinner] = useState<string | null>(null);
 
+  // YENİ MEKANİKLER
+  const [inspectedCard, setInspectedCard] = useState<number | null>(null); // Büyüteç Modu
+  const [isGuessMode, setIsGuessMode] = useState<boolean>(false); // Tahmin Etme Modu
+
   const targetOpponent = currentUser === "Emircan" ? "Efsun" : "Emircan";
   const myPlayerField = currentUser === "Emircan" ? "p1_state" : "p2_state";
   const opPlayerField = currentUser === "Emircan" ? "p2_state" : "p1_state";
 
-  // Renk Hafızası Oyunundaki Kusursuz "Ref" Mimarisi
   const phaseRef = useRef(phase);
   useEffect(() => { phaseRef.current = phase; }, [phase]);
+
+  // Hızlı yüklenme için fotoğrafları arka planda tarayıcı önbelleğine (cache) al
+  useEffect(() => {
+    CHARACTERS.forEach(char => {
+      const img = new Image();
+      img.src = char.image;
+    });
+  }, []);
 
   useEffect(() => {
     const savedName = localStorage.getItem("myName");
@@ -36,25 +48,31 @@ export default function GuessWhoPage() {
 
   useEffect(() => {
     const checkLobbyStatus = (data: any) => {
-      // Kimin kim olduğunu gelen verinin içinden JSONB'den okuyoruz[cite: 3]
       const opState = data[opPlayerField];
       const myState = data[myPlayerField];
       const currentPhase = phaseRef.current;
 
       setIsOpponentReady(opState?.ready || false);
 
-      // Ana oyun lobisine dönme mantığı[cite: 3]
-      if (data.status === 'waiting' && (currentPhase === 'finalResult' || currentPhase === 'playing')) {
+      if (data.status === 'waiting' && (currentPhase === 'finalResult' || currentPhase === 'playing' || currentPhase === 'selectSecret')) {
          setPhase('settings');
          setIsMeReady(false);
          setWinner(null);
          setMySecretCharacter(null);
          setMyFlippedCards(Array(30).fill(false));
          setOpponentFlippedCards(Array(30).fill(false));
+         setIsGuessMode(false);
       }
 
+      // Seçim Ekranına Geçiş
+      if (data.status === 'selecting' && currentPhase === 'settings') {
+         setPhase('selectSecret');
+         playSound("click");
+      }
+
+      // Oyuna Geçiş (İki taraf da seçtikten sonra)
       if (data.status === 'playing') {
-        if (currentPhase === 'settings') {
+        if (currentPhase === 'selectSecret') {
            setPhase('playing');
            playSound("start");
         }
@@ -71,7 +89,6 @@ export default function GuessWhoPage() {
     };
 
     const fetchInitialLobby = async () => {
-      // DİKKAT: Artık sadece ID 1'i kullanıyoruz![cite: 3]
       const { data } = await supabase.from('multiplayer_state').select('*').eq('id', 1).single();
       if (data) checkLobbyStatus(data);
     };
@@ -93,18 +110,24 @@ export default function GuessWhoPage() {
     setIsMeReady(false);
     playSound("click");
 
-    const updateData: any = { [myPlayerField]: { joined: true, ready: false, flipped: Array(30).fill(false), secret: null } };
-    
-    // Eski oyunumuzdaki gibi sadece Emircan status'u beklemeye alır[cite: 3]
+    const updateData: any = { [myPlayerField]: { joined: true, ready: false, flipped: Array(30).fill(false), secret: null, secretSelected: false } };
     if (currentUser === "Emircan") updateData.status = 'waiting';
 
-    // Insert yok, sadece ID: 1 update edilecek[cite: 3]
-    await supabase.from('multiplayer_state').update(updateData).eq('id', 1);
+    const { data: existing } = await supabase.from('multiplayer_state').select('id').eq('id', 1).single();
+    if (!existing) {
+        await supabase.from('multiplayer_state').insert({
+            id: 1,
+            status: 'waiting',
+            p1_state: { joined: currentUser === "Emircan", ready: false },
+            p2_state: { joined: currentUser !== "Emircan", ready: false }
+        });
+    } else {
+        await supabase.from('multiplayer_state').update(updateData).eq('id', 1);
+    }
   };
 
   const returnToMenu = async () => {
     playSound("click");
-    // ID: 1 kullanılarak lobiden çıkış[cite: 3]
     const { data } = await supabase.from('multiplayer_state').select('*').eq('id', 1).single();
     if (data) {
       await supabase.from('multiplayer_state').update({ 
@@ -120,9 +143,8 @@ export default function GuessWhoPage() {
   const toggleReady = async () => {
     playSound("click");
     const newReadyState = !isMeReady;
-    setIsMeReady(newReadyState); // Anında Yeşil UI 
+    setIsMeReady(newReadyState);
 
-    // ID: 1'e direkt update[cite: 3]
     const { data } = await supabase.from('multiplayer_state').select('*').eq('id', 1).single();
     if (data) {
        await supabase.from('multiplayer_state').update({
@@ -131,46 +153,67 @@ export default function GuessWhoPage() {
     }
   };
 
-  const startGame = async () => {
+  const startSelectionPhase = async () => {
     playSound("click");
-    const p1Secret = Math.floor(Math.random() * 30);
-    let p2Secret = Math.floor(Math.random() * 30);
-    while(p2Secret === p1Secret) p2Secret = Math.floor(Math.random() * 30);
-
-    // Bütün oyunları aynı masada (id: 1) yönetiyoruz[cite: 3]
     await supabase.from('multiplayer_state').update({
-      status: 'playing',
+      status: 'selecting',
       shared_data: { winner: null, game_type: 'guess_who' },
-      p1_state: { joined: true, ready: true, flipped: Array(30).fill(false), secret: p1Secret },
-      p2_state: { joined: true, ready: true, flipped: Array(30).fill(false), secret: p2Secret }
+      p1_state: { joined: true, ready: true, flipped: Array(30).fill(false), secret: null, secretSelected: false },
+      p2_state: { joined: true, ready: true, flipped: Array(30).fill(false), secret: null, secretSelected: false }
     }).eq('id', 1);
   };
 
-  const flipMyCard = async (index: number) => {
-    if (myFlippedCards[index]) return;
-    playSound("click"); 
-
-    const newFlipped = [...myFlippedCards];
-    newFlipped[index] = true;
-    setMyFlippedCards(newFlipped); 
+  // GİZLİ KARAKTER SEÇME FONKSİYONU
+  const handleSelectSecret = async (index: number) => {
+    playSound("click");
+    setMySecretCharacter(index);
 
     const { data } = await supabase.from('multiplayer_state').select('*').eq('id', 1).single();
     if (data) {
+        const isOpponentSelected = data[opPlayerField]?.secretSelected;
+        
         await supabase.from('multiplayer_state').update({
-            [myPlayerField]: { ...data[myPlayerField], flipped: newFlipped }
+            [myPlayerField]: { ...data[myPlayerField], secret: index, secretSelected: true },
+            // Eğer diğer oyuncu da daha önce seçtiyse, benim seçimimle birlikte oyunu "playing" (başladı) yap!
+            ...(isOpponentSelected ? { status: 'playing' } : {}) 
         }).eq('id', 1);
     }
   };
 
-  const declareWin = async () => {
-      playSound("success");
-      await supabase.from('multiplayer_state').update({
-          status: 'game_over',
-          shared_data: { winner: currentUser, game_type: 'guess_who' }
-      }).eq('id', 1);
+  // KART TIKLAMA YÖNETİCİSİ (Tahmin vs Kapatma)
+  const handleCardClick = async (index: number) => {
+    if (myFlippedCards[index]) return;
+
+    if (isGuessMode) {
+       // TAHMİN ETME MODU
+       setIsGuessMode(false); // İşlem sonrası modu kapat
+       const { data } = await supabase.from('multiplayer_state').select('*').eq('id', 1).single();
+       if (data) {
+           const opponentSecret = data[opPlayerField].secret;
+           if (index === opponentSecret) {
+               // DOĞRU TAHMİN! SEN KAZANDIN
+               playSound("success");
+               await supabase.from('multiplayer_state').update({ status: 'game_over', shared_data: { winner: currentUser } }).eq('id', 1);
+           } else {
+               // YANLIŞ TAHMİN! EFSUN KAZANDI (Yanlış bildiğin an kaybedersin)
+               playSound("over");
+               await supabase.from('multiplayer_state').update({ status: 'game_over', shared_data: { winner: targetOpponent } }).eq('id', 1);
+           }
+       }
+    } else {
+       // NORMAL KART KAPATMA MODU
+       playSound("click"); 
+       const newFlipped = [...myFlippedCards];
+       newFlipped[index] = true;
+       setMyFlippedCards(newFlipped); 
+
+       const { data } = await supabase.from('multiplayer_state').select('*').eq('id', 1).single();
+       if (data) {
+           await supabase.from('multiplayer_state').update({ [myPlayerField]: { ...data[myPlayerField], flipped: newFlipped } }).eq('id', 1);
+       }
+    }
   };
 
-  // Sekme Kapanırsa Odadan Düşme Olayı (Renk Hafızası ile aynı)[cite: 3]
   useEffect(() => {
     const handleBeforeUnload = () => {
          supabase.from('multiplayer_state').update({ [myPlayerField]: { joined: false, ready: false } }).eq('id', 1).then();
@@ -182,10 +225,7 @@ export default function GuessWhoPage() {
   const renderOpponentCard = (index: number, isFlipped: boolean) => {
     return (
       <div key={`op_${index}`} style={{ perspective: '800px' }} className="w-8 h-12 sm:w-12 sm:h-16 relative">
-        <div 
-          className="w-full h-full absolute top-0 left-0 transition-transform duration-500 ease-out origin-bottom border-2 border-red-700 rounded-md bg-red-600 shadow-lg flex items-center justify-center"
-          style={{ transformStyle: 'preserve-3d', transform: isFlipped ? 'rotateX(90deg)' : 'rotateX(-10deg)' }}
-        >
+        <div className="w-full h-full absolute top-0 left-0 transition-transform duration-500 ease-out origin-bottom border-2 border-red-700 rounded-md bg-red-600 shadow-lg flex items-center justify-center" style={{ transformStyle: 'preserve-3d', transform: isFlipped ? 'rotateX(90deg)' : 'rotateX(-10deg)' }}>
           <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-30"></div>
           <span className="text-white font-black text-xs opacity-50">?</span>
         </div>
@@ -195,14 +235,30 @@ export default function GuessWhoPage() {
 
   const renderMyCard = (char: typeof CHARACTERS[0], index: number, isFlipped: boolean) => {
     return (
-      <div key={`my_${char.id}`} style={{ perspective: '800px' }} className="w-12 h-16 sm:w-16 sm:h-24 relative cursor-pointer" onClick={() => flipMyCard(index)}>
+      <div key={`my_${char.id}`} style={{ perspective: '800px' }} className="w-12 h-16 sm:w-16 sm:h-24 relative cursor-pointer group" onClick={() => handleCardClick(index)}>
         <div 
-          className="w-full h-full absolute bottom-0 left-0 transition-transform duration-500 ease-out origin-bottom border-[3px] border-blue-600 rounded-lg shadow-xl"
-          style={{ transformStyle: 'preserve-3d', transform: isFlipped ? 'rotateX(-90deg)' : 'rotateX(15deg)' }}
+          className="w-full h-full absolute bottom-0 left-0 transition-transform duration-500 ease-out origin-bottom border-[3px] rounded-lg shadow-xl"
+          // Tahmin modundaysa kartları kırmızı parlat (Hedef göstergesi)
+          style={{ 
+            borderColor: isGuessMode && !isFlipped ? '#ef4444' : '#2563eb',
+            boxShadow: isGuessMode && !isFlipped ? '0 0 15px rgba(239,68,68,0.5)' : '',
+            transformStyle: 'preserve-3d', 
+            transform: isFlipped ? 'rotateX(-90deg)' : 'rotateX(15deg)' 
+          }}
         >
           <div className="absolute inset-0 bg-blue-100 rounded-md overflow-hidden" style={{ backfaceVisibility: 'hidden' }}>
              <img src={char.image} alt="character" className="w-full h-full object-cover pointer-events-none" />
-             {isFlipped && <div className="absolute inset-0 bg-black/50"></div>}
+             {isFlipped && <div className="absolute inset-0 bg-black/60"></div>}
+             
+             {/* BÜYÜTEÇ BUTONU (Kart kapanmamışsa görünür) */}
+             {!isFlipped && (
+                 <button 
+                    onClick={(e) => { e.stopPropagation(); setInspectedCard(index); playSound("click"); }}
+                    className="absolute top-1 right-1 w-6 h-6 bg-black/60 backdrop-blur-md rounded-full flex items-center justify-center text-[10px] text-white opacity-0 group-hover:opacity-100 transition-opacity hover:scale-110 border border-white/30"
+                 >
+                    🔍
+                 </button>
+             )}
           </div>
         </div>
       </div>
@@ -213,43 +269,99 @@ export default function GuessWhoPage() {
     <main className="flex flex-col min-h-screen transition-colors duration-500 relative bg-[#1e293b]">
       <div className="absolute inset-0 pointer-events-none opacity-[0.2]" style={{ backgroundImage: 'radial-gradient(#000000 1px, transparent 1px)', backgroundSize: '16px 16px' }}></div>
 
-      {phase === "playing" ? (
-        <div className="flex-1 flex flex-col justify-between w-full h-[100dvh] overflow-hidden py-4 px-2 z-10">
-            <div className="w-full flex flex-col items-center gap-2 mt-4 relative">
+      {/* İNCELEME (ZOOM) MODALI */}
+      {inspectedCard !== null && (
+         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4" onClick={() => setInspectedCard(null)}>
+            <div className="relative max-w-sm w-full bg-slate-900 p-2 rounded-2xl border border-white/20 shadow-2xl animate-in zoom-in-95 duration-200">
+               <img src={CHARACTERS[inspectedCard].image} alt="inspect" className="w-full h-auto rounded-xl" />
+               <p className="text-center text-white/50 text-xs mt-2 uppercase tracking-widest font-bold">Kapatmak için ekrana dokun</p>
+            </div>
+         </div>
+      )}
+
+      {/* KARAKTER SEÇİM EKRANI */}
+      {phase === "selectSecret" && (
+        <div className="flex-1 flex flex-col items-center py-10 px-4 relative z-10 w-full max-w-4xl mx-auto h-[100dvh] overflow-y-auto">
+           <div className="text-center mb-6 bg-slate-900/80 p-4 rounded-3xl border border-yellow-500/30 shadow-[0_0_30px_rgba(234,179,8,0.15)] sticky top-0 z-20 backdrop-blur-md">
+              <h2 className="display-font text-3xl text-yellow-400 font-black tracking-widest mb-1">KİMLİĞİNİ SEÇ</h2>
+              <p className="text-white/70 text-xs font-bold uppercase tracking-widest">
+                 {mySecretCharacter !== null ? `${targetOpponent}'un seçimi bekleniyor...` : "Oyun boyunca gizleyeceğin karakteri belirle."}
+              </p>
+           </div>
+           
+           <div className="grid grid-cols-5 sm:grid-cols-6 gap-3 sm:gap-4 pb-20">
+              {CHARACTERS.map((char, index) => (
+                 <div 
+                    key={`sel_${char.id}`} 
+                    onClick={() => mySecretCharacter === null && handleSelectSecret(index)}
+                    className={`w-14 h-20 sm:w-20 sm:h-28 rounded-xl overflow-hidden cursor-pointer transition-all duration-300 border-[3px] shadow-lg
+                       ${mySecretCharacter === index ? 'border-green-500 scale-110 shadow-[0_0_20px_rgba(34,197,94,0.6)]' : 
+                         mySecretCharacter !== null ? 'border-slate-800 opacity-30 grayscale' : 'border-slate-600 hover:border-yellow-400 hover:scale-105'
+                       }
+                    `}
+                 >
+                    <img src={char.image} alt="character" className="w-full h-full object-cover" />
+                 </div>
+              ))}
+           </div>
+        </div>
+      )}
+
+      {phase === "playing" && (
+        <div className="flex-1 flex flex-col justify-between w-full h-[100dvh] overflow-hidden py-2 sm:py-4 px-2 z-10">
+            {/* EFSUN'UN TAHTASI */}
+            <div className="w-full flex flex-col items-center gap-2 mt-2 sm:mt-4 relative">
                 <div className="bg-red-600/20 border border-red-500/50 px-6 py-2 rounded-xl backdrop-blur-sm shadow-[0_10px_30px_rgba(220,38,38,0.3)]">
                     <span className="text-red-400 font-black tracking-widest uppercase text-sm">
                         {targetOpponent}'un Tahtası
                     </span>
                 </div>
-                <div className="grid grid-cols-6 gap-2 sm:gap-4 mt-4 p-4 bg-red-900/40 rounded-2xl border-t-4 border-red-800" style={{ transform: 'rotateX(10deg)', perspective: '1000px' }}>
+                <div className="grid grid-cols-6 gap-2 sm:gap-4 mt-2 sm:mt-4 p-3 sm:p-4 bg-red-900/40 rounded-2xl border-t-4 border-red-800" style={{ transform: 'rotateX(10deg)', perspective: '1000px' }}>
                     {CHARACTERS.map((_, i) => renderOpponentCard(i, opponentFlippedCards[i]))}
                 </div>
             </div>
 
+            {/* TAHMİN ET BUTONU */}
             <div className="w-full flex items-center justify-center my-2 relative z-20">
-                <button onClick={declareWin} className="bg-green-500 text-white font-black px-8 py-3 rounded-full shadow-[0_0_20px_rgba(34,197,94,0.6)] animate-pulse hover:scale-110 active:scale-95 transition-transform border-4 border-green-300">
-                    🔍 KİM OLDUĞUNU BULDUM!
+                <button 
+                  onClick={() => setIsGuessMode(!isGuessMode)} 
+                  className={`px-8 py-3 rounded-full font-black uppercase tracking-widest transition-all duration-300 shadow-xl border-4 
+                    ${isGuessMode ? 'bg-red-600 text-white border-red-400 shadow-[0_0_30px_rgba(239,68,68,0.6)] animate-pulse' 
+                                  : 'bg-yellow-500 text-slate-900 border-yellow-300 hover:scale-105 active:scale-95 shadow-[0_0_20px_rgba(234,179,8,0.4)]'
+                    }`}
+                >
+                    {isGuessMode ? "❌ İPTAL ET" : "🎯 TAHMİN ET"}
                 </button>
             </div>
+            
+            {/* TAHMİN MODU UYARISI */}
+            {isGuessMode && (
+               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-30 bg-red-600/90 backdrop-blur-md text-white px-6 py-3 rounded-2xl border border-red-400 shadow-2xl text-center pointer-events-none animate-in zoom-in-95">
+                  <p className="font-black uppercase tracking-widest text-lg">DİKKAT!</p>
+                  <p className="text-xs font-bold opacity-80 mt-1">Aşağıdan hedefini seç. Yanlış bilirsen kaybedersin!</p>
+               </div>
+            )}
 
-            <div className="w-full flex flex-col items-center gap-2 mb-4 relative z-30">
-                <div className="grid grid-cols-6 gap-2 sm:gap-4 p-4 bg-blue-900/40 rounded-2xl border-b-4 border-blue-800 shadow-[0_-10px_30px_rgba(37,99,235,0.2)]">
+            {/* SENİN TAHTAN */}
+            <div className="w-full flex flex-col items-center gap-2 mb-2 sm:mb-4 relative z-30">
+                <div className="grid grid-cols-6 gap-2 sm:gap-4 p-3 sm:p-4 bg-blue-900/40 rounded-2xl border-b-4 border-blue-800 shadow-[0_-10px_30px_rgba(37,99,235,0.2)]">
                     {CHARACTERS.map((char, i) => renderMyCard(char, i, myFlippedCards[i]))}
                 </div>
+                
                 <div className="flex items-center justify-between w-full max-w-sm px-4 mt-2">
-                    <span className="bg-blue-600/20 border border-blue-500/50 px-4 py-1 rounded-xl backdrop-blur-sm text-blue-400 font-black tracking-widest uppercase text-xs">
+                    <span className="bg-blue-600/20 border border-blue-500/50 px-4 py-1 rounded-xl backdrop-blur-sm text-blue-400 font-black tracking-widest uppercase text-xs hidden sm:block">
                         Senin Tahtan
                     </span>
-                    <div className="flex items-center gap-3 bg-black/60 border border-white/20 p-2 rounded-xl shadow-2xl">
+                    <div className="flex items-center gap-3 bg-black/60 border border-white/20 p-2 rounded-xl shadow-2xl ml-auto">
                         <span className="text-white/60 text-[10px] font-bold uppercase tracking-widest text-right leading-tight">Senin<br/>Gizli<br/>Karakterin</span>
-                        <div className="w-12 h-16 rounded-md overflow-hidden border-2 border-yellow-400 shadow-[0_0_15px_rgba(250,204,21,0.5)]">
+                        <div className="w-10 h-14 sm:w-12 sm:h-16 rounded-md overflow-hidden border-2 border-yellow-400 shadow-[0_0_15px_rgba(250,204,21,0.5)] cursor-pointer hover:scale-110 transition-transform" onClick={() => mySecretCharacter !== null && setInspectedCard(mySecretCharacter)}>
                            {mySecretCharacter !== null && <img src={CHARACTERS[mySecretCharacter].image} alt="secret" className="w-full h-full object-cover" />}
                         </div>
                     </div>
                 </div>
             </div>
         </div>
-      ) : (
+      ) : phase !== "selectSecret" ? (
         <div className="p-5 animate-in fade-in duration-500 flex flex-col h-full items-center justify-center relative z-10 w-full max-w-md mx-auto">
             {phase !== "finalResult" && (
             <div className="absolute top-5 left-5">
@@ -294,8 +406,8 @@ export default function GuessWhoPage() {
                   </div>
                   
                   {currentUser === "Emircan" ? (
-                    <button onClick={startGame} disabled={!isOpponentReady || !isMeReady} className={`w-full mt-2 p-5 rounded-2xl shadow-xl transition-all duration-300 font-black text-lg tracking-widest uppercase ${isOpponentReady && isMeReady ? 'bg-blue-600 text-white hover:scale-[1.02] ring-4 ring-blue-400/30' : 'bg-background border-2 border-primary/20 text-primary/40 cursor-not-allowed'}`}>
-                      {isOpponentReady && isMeReady ? "PANOLARI AÇ 🚀" : "EFSUN BEKLENİYOR..."}
+                    <button onClick={startSelectionPhase} disabled={!isOpponentReady || !isMeReady} className={`w-full mt-2 p-5 rounded-2xl shadow-xl transition-all duration-300 font-black text-lg tracking-widest uppercase ${isOpponentReady && isMeReady ? 'bg-blue-600 text-white hover:scale-[1.02] ring-4 ring-blue-400/30' : 'bg-background border-2 border-primary/20 text-primary/40 cursor-not-allowed'}`}>
+                      {isOpponentReady && isMeReady ? "KARAKTER SEÇİMİNE GEÇ 🚀" : "EFSUN BEKLENİYOR..."}
                     </button>
                   ) : (
                     <div className="text-center text-xs font-bold text-text/50 uppercase tracking-widest mt-2 animate-pulse">
@@ -311,7 +423,7 @@ export default function GuessWhoPage() {
 
             {phase === "finalResult" && (
                 <div className="flex flex-col items-center justify-center gap-6 w-full mt-20 text-center">
-                  <div className="text-7xl drop-shadow-lg">👑</div>
+                  <div className="text-7xl drop-shadow-lg">{winner === currentUser ? "👑" : "💀"}</div>
                   <h2 className="display-font text-4xl text-white mb-2 font-black">
                     {winner === currentUser ? "DEDEKTİF SENSİN!" : "ÖNCE O BULDU..."}
                   </h2>
@@ -326,7 +438,7 @@ export default function GuessWhoPage() {
                 </div>
             )}
         </div>
-      )}
+      ) : null}
     </main>
   );
 }
