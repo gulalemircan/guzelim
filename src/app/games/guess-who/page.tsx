@@ -26,7 +26,7 @@ export default function GuessWhoPage() {
   const [inspectedCard, setInspectedCard] = useState<number | null>(null);
   
   const [isGuessMode, setIsGuessMode] = useState<boolean>(false);
-  const [pendingGuess, setPendingGuess] = useState<number | null>(null); // YENİ: Emin misin? onayı için
+  const [pendingGuess, setPendingGuess] = useState<number | null>(null); 
 
   const targetOpponent = currentUser === "Emircan" ? "Efsun" : "Emircan";
   const myPlayerField = currentUser === "Emircan" ? "p1_state" : "p2_state";
@@ -189,17 +189,16 @@ export default function GuessWhoPage() {
   };
 
   const handleCardClick = async (index: number) => {
-    if (myFlippedCards[index]) return;
-
     if (isGuessMode) {
-       // Tahmin modundaysa direkt bitirme, onay ekranını aç
+       // Tahmin modunda kapalı karta tıklanmasını (kazayla) engelle
+       if (myFlippedCards[index]) return; 
        playSound("click");
        setPendingGuess(index);
     } else {
-       // Normal kapatma modu
+       // NORMAL MOD: Kartı kapat veya geri aç (TOGGLE)
        playSound("click"); 
        const newFlipped = [...myFlippedCards];
-       newFlipped[index] = true;
+       newFlipped[index] = !newFlipped[index]; // Artık TRUE/FALSE arasında geçiş yapıyor!
        setMyFlippedCards(newFlipped); 
 
        const { data } = await supabase.from('multiplayer_state').select('*').eq('id', 1).single();
@@ -209,12 +208,11 @@ export default function GuessWhoPage() {
     }
   };
 
-  // YENİ: Tahmini Onaylama Fonksiyonu
   const confirmGuess = async () => {
     if (pendingGuess === null) return;
     setIsGuessMode(false); 
     const guessedIndex = pendingGuess;
-    setPendingGuess(null); // Modalı kapat
+    setPendingGuess(null); 
 
     const { data } = await supabase.from('multiplayer_state').select('*').eq('id', 1).single();
     if (data) {
@@ -237,7 +235,6 @@ export default function GuessWhoPage() {
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, [myPlayerField]);
 
-  // MOBİL İÇİN OPTİMİZE EDİLMİŞ KART RENDERLARI
   const renderOpponentCard = (index: number, isFlipped: boolean) => {
     return (
       <div key={`op_${index}`} style={{ perspective: '800px' }} className="w-8 h-12 sm:w-12 sm:h-16 relative">
@@ -281,7 +278,7 @@ export default function GuessWhoPage() {
     <main className="flex flex-col min-h-screen transition-colors duration-500 relative bg-[#1e293b]">
       <div className="absolute inset-0 pointer-events-none opacity-[0.2]" style={{ backgroundImage: 'radial-gradient(#000000 1px, transparent 1px)', backgroundSize: '16px 16px' }}></div>
 
-      {/* İNCELEME (ZOOM) MODALI */}
+      {/* İNCELEME MODALI */}
       {inspectedCard !== null && (
          <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/80 p-4" onClick={() => setInspectedCard(null)}>
             <div className="relative max-w-sm w-full bg-slate-900 p-2 rounded-2xl border border-white/20 shadow-2xl animate-in zoom-in-95 duration-200">
@@ -291,7 +288,7 @@ export default function GuessWhoPage() {
          </div>
       )}
 
-      {/* YENİ: TAHMİN ONAY (EMİN MİSİN?) MODALI */}
+      {/* TAHMİN ONAY MODALI */}
       {pendingGuess !== null && (
          <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/90 p-4 animate-in fade-in">
             <div className="relative max-w-xs w-full bg-slate-900 p-5 rounded-3xl border border-red-500/50 shadow-[0_0_40px_rgba(239,68,68,0.3)] flex flex-col items-center text-center animate-in zoom-in-95">
@@ -314,6 +311,7 @@ export default function GuessWhoPage() {
          </div>
       )}
 
+      {/* KARAKTER SEÇİM EKRANI */}
       {phase === "selectSecret" && (
         <div className="flex-1 flex flex-col items-center py-10 px-4 relative z-10 w-full max-w-4xl mx-auto h-[100dvh] overflow-y-auto">
            <div className="text-center mb-6 bg-slate-900 p-4 rounded-3xl border border-yellow-500/30 shadow-lg sticky top-0 z-20 flex flex-col items-center">
@@ -347,8 +345,10 @@ export default function GuessWhoPage() {
         </div>
       )}
 
+      {/* OYUN EKRANI */}
       {phase === "playing" && (
         <div className="flex-1 flex flex-col justify-between w-full h-[100dvh] overflow-hidden py-2 sm:py-4 px-2 z-10">
+            {/* EFSUN'UN TAHTASI */}
             <div className="w-full flex flex-col items-center gap-2 mt-2 sm:mt-4 relative">
                 <div className="bg-red-600/20 border border-red-500/50 px-6 py-2 rounded-xl shadow-sm">
                     <span className="text-red-400 font-black tracking-widest uppercase text-sm">
@@ -360,6 +360,7 @@ export default function GuessWhoPage() {
                 </div>
             </div>
 
+            {/* TAHMİN ET BUTONU */}
             <div className="w-full flex items-center justify-center my-2 relative z-20">
                 <button 
                   onClick={() => setIsGuessMode(!isGuessMode)} 
@@ -372,6 +373,7 @@ export default function GuessWhoPage() {
                 </button>
             </div>
 
+            {/* SENİN TAHTAN */}
             <div className="w-full flex flex-col items-center gap-2 mb-2 sm:mb-4 relative z-30">
                 <div className="grid grid-cols-6 gap-2 sm:gap-4 p-3 sm:p-4 bg-blue-900/40 rounded-2xl border-b-4 border-blue-800 shadow-inner">
                     {CHARACTERS.map((char, i) => renderMyCard(char, i, myFlippedCards[i]))}
@@ -392,6 +394,7 @@ export default function GuessWhoPage() {
         </div>
       )}
 
+      {/* LOBİ, AYARLAR VE SONUÇ EKRANLARI */}
       {(phase === "modeSelect" || phase === "settings" || phase === "finalResult") && (
         <div className="p-5 animate-in fade-in duration-500 flex flex-col h-full items-center justify-center relative z-10 w-full max-w-md mx-auto">
             {phase !== "finalResult" && (
