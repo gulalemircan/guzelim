@@ -228,7 +228,7 @@ export default function TripRoomPage() {
       )}
 
       {/* ============================================================================== */}
-      {/* 🏡 3 BOYUTLU ODA VE MERKEZDEKİ MASA */}
+      {/* 🏡 3 BOYUTLU ODA KUTUSU */}
       {/* ============================================================================== */}
       <div 
         className="absolute inset-0 pointer-events-auto z-10"
@@ -349,92 +349,111 @@ export default function TripRoomPage() {
               </div>
            </div>
 
+
            {/* ============================================================================== */}
-           {/* 🔥 SALONUN TAM ORTASINDAKİ, ÇİTSİZ AÇIK FİZİKSEL MASA 🔥 */}
+           {/* 🔥 SON SÜRÜM: AYAKLARI YERE BASAN, %100 DÜZGÜN FİZİKSEL MASA 🔥 */}
            {/* ============================================================================== */}
            <div 
-             className="absolute left-1/2 bottom-0 w-[800px] h-[450px]"
+             className="absolute bottom-0 left-1/2 w-[800px] h-[250px] z-30 pointer-events-none"
              style={{
                 transformStyle: 'preserve-3d',
-                transformOrigin: 'bottom',
-                transform: 'translateX(-50%) rotateX(90deg) translateZ(250px) translateY(-700px)'
+                transform: 'translateX(-50%) translateZ(-500px)' 
              }}
            >
-              {/* Masanın Üst Yüzeyi (Ahşap) */}
-              <div className="absolute inset-0 bg-[#5C4033] border-4 border-[#3E2723] rounded-3xl shadow-[0_0_80px_rgba(0,0,0,0.8)]">
-                 <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/wood-pattern.png')] opacity-60 rounded-3xl pointer-events-none"></div>
+              {/* 1. MASA YÜZEYİ (Ahşap Üst Kısım) */}
+              <div 
+                className="absolute top-0 left-0 w-full h-[400px] bg-[#5C4033] border-[4px] border-[#3E2723] rounded-[32px] shadow-[inset_0_0_50px_rgba(0,0,0,0.8)] pointer-events-auto"
+                style={{ transformOrigin: 'top', transform: 'translateY(-200px) rotateX(90deg)' }}
+              >
+                 <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/wood-pattern.png')] opacity-60 rounded-[28px] pointer-events-none"></div>
               </div>
 
-              {/* MASA BACAKLARI (Aşağıya, yani parkeye doğru inen 4 bacak) */}
-              <div className="absolute top-[20px] left-[20px] w-[20px] h-[250px] bg-[#2A1B12] rounded-b-md shadow-2xl" style={{ transformOrigin: 'top', transform: 'rotateX(90deg)' }}></div>
-              <div className="absolute top-[20px] right-[20px] w-[20px] h-[250px] bg-[#2A1B12] rounded-b-md shadow-2xl" style={{ transformOrigin: 'top', transform: 'rotateX(90deg)' }}></div>
-              <div className="absolute bottom-[20px] left-[20px] w-[24px] h-[250px] bg-[#1a100a] rounded-b-md shadow-2xl" style={{ transformOrigin: 'top', transform: 'rotateX(90deg)' }}></div>
-              <div className="absolute bottom-[20px] right-[20px] w-[24px] h-[250px] bg-[#1a100a] rounded-b-md shadow-2xl" style={{ transformOrigin: 'top', transform: 'rotateX(90deg)' }}></div>
-
-              {/* --- MASANIN ÜZERİNDEKİ OBJELER --- */}
-              {/* 1. Tavşan 🐰 */}
+              {/* 2. MASA ÖN KALINLIĞI (Apron ve Çekmece) */}
               <div 
-                 onClick={handleBunnyClick} 
-                 className={`absolute bottom-[80px] left-[80px] w-[140px] h-[140px] pointer-events-auto cursor-pointer transition-transform duration-300 ${bunnyBounce ? 'scale-110' : 'hover:scale-105'}`}
-                 style={{ transformStyle: 'preserve-3d', transformOrigin: 'bottom', transform: `rotateX(-90deg) ${bunnyBounce ? 'translateY(-40px)' : ''}` }}
+                className="absolute top-0 left-0 w-full h-[40px] bg-[#3A2518] rounded-b-xl shadow-[0_20px_30px_rgba(0,0,0,0.9)] flex items-center justify-center border-t border-[#1a100a] pointer-events-auto"
+                style={{ transform: 'translateZ(200px)' }}
               >
-                 <img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Animals/Rabbit.png" alt="Tavşan" className="w-full h-full object-contain drop-shadow-[0_20px_15px_rgba(0,0,0,0.8)]" />
+                 {/* Çekmece Detayı */}
+                 <div className="w-[300px] h-[25px] bg-[#2A1B12] rounded-md shadow-[inset_0_5px_10px_rgba(0,0,0,0.8)] flex items-center justify-center border border-black/40">
+                    <div className="w-20 h-2 bg-black/60 rounded-full shadow-[0_1px_2px_rgba(255,255,255,0.1)]"></div>
+                 </div>
               </div>
 
-              {/* 2. Çiçek 🌸 */}
-              <div 
-                 className="absolute bottom-[180px] left-[340px] w-[120px] h-[120px]"
-                 style={{ transformStyle: 'preserve-3d', transformOrigin: 'bottom', transform: 'rotateX(-90deg)' }}
-              >
-                 {roomMode === 'trip' ? (
-                     <img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Animals/Wilted%20Flower.png" alt="Solgun Çiçek" className="w-full h-full object-contain drop-shadow-[0_15px_10px_rgba(0,0,0,0.7)]" />
-                 ) : (
-                     <img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Animals/Blossom.png" alt="Canlı Çiçek" className="w-full h-full object-contain drop-shadow-[0_15px_10px_rgba(0,0,0,0.7)]" />
-                 )}
-              </div>
+              {/* 3. MASA BACAKLARI (Şimdi Yere Doğru - DümDüz Aşağı Bakıyor!) */}
+              <div className="absolute top-[30px] left-[30px] w-[20px] h-[220px] bg-[#2A1B12] rounded-b-xl shadow-2xl" style={{ transform: 'translateZ(170px)' }}></div>
+              <div className="absolute top-[30px] right-[30px] w-[20px] h-[220px] bg-[#2A1B12] rounded-b-xl shadow-2xl" style={{ transform: 'translateZ(170px)' }}></div>
+              <div className="absolute top-[30px] left-[30px] w-[16px] h-[220px] bg-[#1a100a] rounded-b-xl shadow-2xl" style={{ transform: 'translateZ(-170px)' }}></div>
+              <div className="absolute top-[30px] right-[30px] w-[16px] h-[220px] bg-[#1a100a] rounded-b-xl shadow-2xl" style={{ transform: 'translateZ(-170px)' }}></div>
 
-              {/* 3. Kahve ☕ */}
-              <div 
-                 onClick={handleCoffeeClick} 
-                 className="absolute bottom-[60px] right-[260px] w-[120px] h-[120px] pointer-events-auto cursor-pointer group"
-                 style={{ transformStyle: 'preserve-3d', transformOrigin: 'bottom', transform: 'rotateX(-90deg)' }}
-              >
-                 {roomMode === 'trip' && coffeeClickCount < 5 && (
-                    <div className="absolute -top-16 left-1/2 -translate-x-1/2 flex gap-2 opacity-60 pointer-events-none">
-                       <div className="w-1.5 h-12 bg-white/70 blur-md rounded-full animate-pulse" style={{ animationDelay: '0s' }}></div>
-                       <div className="w-1.5 h-20 bg-white/70 blur-md rounded-full animate-pulse" style={{ animationDelay: '0.2s' }}></div>
-                       <div className="w-1.5 h-10 bg-white/70 blur-md rounded-full animate-pulse" style={{ animationDelay: '0.4s' }}></div>
-                    </div>
-                 )}
-                 <img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Food/Hot%20Beverage.png" alt="Kahve" className="w-full h-full object-contain drop-shadow-[0_20px_20px_rgba(0,0,0,0.9)] group-hover:scale-105 transition-transform" />
-              </div>
+              {/* 4. MASANIN ÜZERİNDEKİ OBJELER */}
+              <div className="absolute top-0 left-0 w-full h-0" style={{ transformStyle: 'preserve-3d' }}>
+                 
+                 {/* Tavşan 🐰 */}
+                 <div 
+                    onClick={handleBunnyClick} 
+                    className={`absolute bottom-[5px] left-[80px] w-[140px] h-[140px] pointer-events-auto cursor-pointer transition-transform duration-300 ${bunnyBounce ? 'scale-110 -translate-y-12' : 'hover:scale-105'}`}
+                    style={{ transform: 'translateZ(60px)' }}
+                 >
+                    <img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Animals/Rabbit.png" alt="Tavşan" className="w-full h-full object-contain drop-shadow-[0_20px_15px_rgba(0,0,0,0.8)]" />
+                 </div>
 
-              {/* 4. Çerçeve 🖼️ */}
-              <div 
-                 className="absolute bottom-[60px] right-[60px] w-[130px] h-[170px] pointer-events-auto cursor-pointer transition-all duration-1000 ease-in-out"
-                 style={{ 
-                    transformStyle: 'preserve-3d', 
-                    transformOrigin: 'bottom', 
-                    transform: roomMode === 'trip' ? 'rotateX(0deg) rotateZ(15deg) translateZ(2px)' : 'rotateX(-70deg) rotateZ(-10deg)' 
-                 }}
-              >
-                  <div className={`absolute inset-0 bg-[#E5E5E5] flex flex-col items-center justify-center transition-opacity duration-700 border-4 border-gray-300 rounded-md shadow-2xl ${roomMode === 'trip' ? 'opacity-100 z-20' : 'opacity-0 z-0'}`}>
-                     <span className="text-4xl opacity-50 drop-shadow-md">🔒</span>
-                     <span className="text-gray-500 text-[9px] font-bold mt-2 uppercase tracking-widest">Kilitli Anı</span>
-                  </div>
-                  
-                  <div className="absolute inset-0 bg-white p-2 pb-10 shadow-[0_30px_40px_rgba(0,0,0,0.8)] border border-gray-200">
-                     <div className="w-full h-full bg-gray-200 overflow-hidden relative">
-                        <img src="https://images.unsplash.com/photo-1511895426328-dc8714191300?q=80&w=400&auto=format&fit=crop" className="w-full h-full object-cover" alt="Mutlu Anı" />
-                        <div className="absolute bottom-2 right-2 text-white/90 font-serif text-[9px] italic drop-shadow-md">E & E</div>
+                 {/* Çiçek 🌸 */}
+                 <div 
+                    className="absolute bottom-[5px] left-[340px] w-[120px] h-[120px] pointer-events-none"
+                    style={{ transform: 'translateZ(-60px)' }}
+                 >
+                    {roomMode === 'trip' ? (
+                        <img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Animals/Wilted%20Flower.png" alt="Solgun Çiçek" className="w-full h-full object-contain drop-shadow-[0_15px_10px_rgba(0,0,0,0.7)]" />
+                    ) : (
+                        <img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Animals/Blossom.png" alt="Canlı Çiçek" className="w-full h-full object-contain drop-shadow-[0_15px_10px_rgba(0,0,0,0.7)]" />
+                    )}
+                 </div>
+
+                 {/* Kahve ☕ */}
+                 <div 
+                    onClick={handleCoffeeClick} 
+                    className="absolute bottom-[5px] right-[260px] w-[120px] h-[120px] pointer-events-auto cursor-pointer group"
+                    style={{ transform: 'translateZ(100px)' }}
+                 >
+                    {roomMode === 'trip' && coffeeClickCount < 5 && (
+                       <div className="absolute -top-16 left-1/2 -translate-x-1/2 flex gap-2 opacity-60 pointer-events-none">
+                          <div className="w-1.5 h-12 bg-white/70 blur-md rounded-full animate-pulse" style={{ animationDelay: '0s' }}></div>
+                          <div className="w-1.5 h-20 bg-white/70 blur-md rounded-full animate-pulse" style={{ animationDelay: '0.2s' }}></div>
+                          <div className="w-1.5 h-10 bg-white/70 blur-md rounded-full animate-pulse" style={{ animationDelay: '0.4s' }}></div>
+                       </div>
+                    )}
+                    <img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Food/Hot%20Beverage.png" alt="Kahve" className="w-full h-full object-contain drop-shadow-[0_20px_20px_rgba(0,0,0,0.9)] group-hover:scale-105 transition-transform" />
+                 </div>
+
+                 {/* Çerçeve 🖼️ (Yatık / Dik Durum Animasyonu) */}
+                 <div 
+                    className="absolute bottom-[5px] right-[60px] w-[120px] h-[160px] pointer-events-auto cursor-pointer transition-all duration-1000 ease-in-out"
+                    style={{ 
+                       transformOrigin: 'bottom', 
+                       transform: roomMode === 'trip' ? 'translateZ(100px) rotateX(75deg) rotateZ(-15deg)' : 'translateZ(100px) rotateX(20deg) rotateZ(-5deg)' 
+                    }}
+                 >
+                     {/* Trip Modu: Arka Yüzü */}
+                     <div className={`absolute inset-0 bg-[#E5E5E5] flex flex-col items-center justify-center transition-opacity duration-700 border-2 border-gray-300 rounded-md shadow-2xl ${roomMode === 'trip' ? 'opacity-100 z-20' : 'opacity-0 z-0'}`}>
+                        <span className="text-4xl opacity-50 drop-shadow-md">🔒</span>
+                        <span className="text-gray-500 text-[9px] font-bold mt-2 uppercase tracking-widest">Kilitli Anı</span>
                      </div>
-                     <div className="absolute bottom-3 left-0 w-full text-center">
-                        <span className="font-serif text-[#3E2723] text-xs italic font-bold">Seninle her an... 🤍</span>
+                     
+                     {/* Barış Modu: Fotoğraf */}
+                     <div className="absolute inset-0 bg-white p-2 pb-10 shadow-[0_20px_30px_rgba(0,0,0,0.8)] border border-gray-200">
+                        <div className="w-full h-full bg-gray-200 overflow-hidden relative">
+                           <img src="https://images.unsplash.com/photo-1511895426328-dc8714191300?q=80&w=400&auto=format&fit=crop" className="w-full h-full object-cover" alt="Mutlu Anı" />
+                           <div className="absolute bottom-1 right-1 text-white/90 font-serif text-[8px] italic drop-shadow-md">E & E</div>
+                        </div>
+                        <div className="absolute bottom-2 left-0 w-full text-center">
+                           <span className="font-serif text-[#3E2723] text-[10px] italic font-bold">Seninle her an... 🤍</span>
+                        </div>
                      </div>
-                  </div>
-              </div>
+                 </div>
 
+              </div>
            </div>
+
         </div>
       </div>
     </main>
