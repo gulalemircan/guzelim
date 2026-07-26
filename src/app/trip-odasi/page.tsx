@@ -134,10 +134,9 @@ export default function TripRoomPage() {
     }
   };
 
-  // Kameranın oda içinde farenle sağa sola bakmasını sağlayan 3D sistem
   const handleMouseMove = (e: React.MouseEvent) => {
-    const x = (e.clientX / window.innerWidth - 0.5) * 30; // Sağa sola dönüş (max 15 derece)
-    const y = (e.clientY / window.innerHeight - 0.5) * -10; // Aşağı yukarı dönüş
+    const x = (e.clientX / window.innerWidth - 0.5) * 30;
+    const y = (e.clientY / window.innerHeight - 0.5) * -10;
     setRotation({ x: y, y: x });
   };
 
@@ -171,7 +170,6 @@ export default function TripRoomPage() {
       onMouseMove={handleMouseMove}
       onTouchMove={handleTouchMove}
     >
-      {/* --- ARAYÜZ (ODANIN DIŞINDA, EKRANA SABİT) --- */}
       <div className="absolute top-5 left-5 right-5 flex justify-between z-[200] pointer-events-auto">
         <Link href="/home" onClick={() => playSound("click")} className="px-4 py-2 bg-black/40 text-white rounded-xl font-bold backdrop-blur-md border border-white/20 hover:bg-white/20 transition-colors">
           ← Odadan Çık
@@ -189,7 +187,6 @@ export default function TripRoomPage() {
         </div>
       </div>
 
-      {/* --- GÜVERCİN VE MODALLAR --- */}
       {pigeonActive && (
          <div className="absolute inset-0 z-[150] pointer-events-none flex items-center justify-center">
             <div onClick={() => currentUser === 'Efsun' && setIsReadingNote(true)} className={`pointer-events-auto cursor-pointer animate-bounce absolute top-1/4 bg-card border-2 border-primary p-4 rounded-3xl shadow-[0_0_50px_rgba(255,255,255,0.4)] flex items-center gap-3 hover:scale-110 transition-transform`}>
@@ -258,7 +255,6 @@ export default function TripRoomPage() {
            {/* SOL DUVAR (Laf Sokma Köşesi) */}
            <div className={`absolute top-0 bottom-0 left-0 transition-colors duration-1000 overflow-hidden flex items-center justify-center ${roomMode === 'trip' ? 'bg-[#1e293b]' : 'bg-[#FFE3E1]'}`} style={{ width: `${roomDepth}px`, transformOrigin: 'left', transform: 'rotateY(90deg)' }}>
               <div className="absolute bottom-0 w-full h-12 bg-black/20"></div>
-              
               <div className={`w-[450px] p-6 rounded-2xl border-[12px] shadow-2xl transition-colors duration-1000 relative z-10 ${roomMode === 'trip' ? 'border-[#0f172a] bg-[#020617]' : 'border-[#8B0000] bg-card'}`}>
                    <h3 className={`font-black uppercase tracking-widest text-center text-sm mb-4 transition-colors duration-1000 ${roomMode === 'trip' ? 'text-red-500' : 'text-pink-500'}`}>
                       {roomMode === 'trip' ? "Laf Sokma Köşesi" : "Günün Şarkısı"}
@@ -290,7 +286,6 @@ export default function TripRoomPage() {
            {/* SAĞ DUVAR (Reels Panosu) */}
            <div className={`absolute top-0 bottom-0 right-0 transition-colors duration-1000 flex flex-col items-center justify-center ${roomMode === 'trip' ? 'bg-[#1e293b]' : 'bg-[#FFE3E1]'}`} style={{ width: `${roomDepth}px`, transformOrigin: 'right', transform: 'rotateY(-90deg)' }}>
               <div className="absolute bottom-0 w-full h-12 bg-black/20"></div>
-              
               <div className="relative z-10 flex flex-col items-center">
                  <div className="w-[500px] h-[550px] bg-[#D4A373] border-[16px] border-[#8B5A2B] rounded-lg shadow-2xl relative p-6 overflow-y-auto custom-scrollbar">
                     <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cork-board.png')] opacity-60 pointer-events-none"></div>
@@ -338,7 +333,6 @@ export default function TripRoomPage() {
            {/* ARKA DUVAR (Pencere) */}
            <div className={`absolute inset-0 transition-colors duration-1000 flex flex-col items-center justify-center ${roomMode === 'trip' ? 'bg-[#334155]' : 'bg-[#FFF5E4]'}`} style={{ transform: `translateZ(-${roomDepth}px)` }}>
               <div className="absolute bottom-0 w-full h-12 bg-black/20 z-0"></div>
-              
               <div className={`absolute top-20 w-[600px] h-[650px] border-[28px] rounded-t-full shadow-[0_0_100px_rgba(0,0,0,0.5)] overflow-hidden transition-all duration-1000 ${roomMode === 'trip' ? 'border-[#0f172a]' : 'border-white'}`}>
                   <div className={`absolute inset-0 transition-opacity duration-1000 ${roomMode === 'trip' ? 'opacity-100' : 'opacity-0'}`}>
                      <img src="https://images.unsplash.com/photo-1515694346937-94d85e41e6f0?q=80&w=1000&auto=format&fit=crop" alt="Rain" className="w-full h-full object-cover blur-[2px] brightness-50" />
@@ -346,57 +340,42 @@ export default function TripRoomPage() {
                         <span className="text-white/20 text-sm tracking-[10px] uppercase font-bold text-center">Soğuk ve<br/>Buğulu</span>
                      </div>
                   </div>
-                  
                   <div className={`absolute inset-0 transition-opacity duration-1000 ${roomMode === 'peace' ? 'opacity-100' : 'opacity-0'}`}>
                      <img src="https://images.unsplash.com/photo-1590419690008-905895e8fd0d?q=80&w=1000&auto=format&fit=crop" alt="Sun" className="w-full h-full object-cover brightness-110" />
                      <div className="absolute inset-0 bg-yellow-400/20 mix-blend-overlay pointer-events-none"></div>
                   </div>
-
                   <div className={`absolute left-1/2 top-0 bottom-0 w-5 -translate-x-1/2 transition-colors duration-1000 ${roomMode === 'trip' ? 'bg-[#0f172a]' : 'bg-white'}`}></div>
                   <div className={`absolute top-[60%] left-0 right-0 h-5 -translate-y-1/2 transition-colors duration-1000 ${roomMode === 'trip' ? 'bg-[#0f172a]' : 'bg-white'}`}></div>
               </div>
            </div>
 
            {/* ============================================================================== */}
-           {/* 🔥 SALONUN TAM ORTASINDAKİ FİZİKSEL MASA 🔥 */}
+           {/* 🔥 SALONUN TAM ORTASINDAKİ, ÇİTSİZ AÇIK FİZİKSEL MASA 🔥 */}
            {/* ============================================================================== */}
            <div 
-             className="absolute left-1/2 bottom-0 w-[900px] h-[500px]"
+             className="absolute left-1/2 bottom-0 w-[800px] h-[450px]"
              style={{
                 transformStyle: 'preserve-3d',
                 transformOrigin: 'bottom',
-                /* 
-                  1. translateX(-50%) ile ekranın ortasına aldık.
-                  2. rotateX(90deg) ile parkenin üzerine halı gibi yatırdık.
-                  3. translateZ(250px) ile parkeden 250px yukarı (havaya) kaldırdık.
-                  4. translateY(-700px) ile odanın içine doğru, arka duvara yaklaşacak şekilde ittik!
-                */
                 transform: 'translateX(-50%) rotateX(90deg) translateZ(250px) translateY(-700px)'
              }}
            >
               {/* Masanın Üst Yüzeyi (Ahşap) */}
-              <div className="absolute inset-0 bg-[#5C4033] border-[6px] border-[#3E2723] rounded-[40px] shadow-[0_0_80px_rgba(0,0,0,0.9)]">
-                 <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/wood-pattern.png')] opacity-60 rounded-[34px] pointer-events-none"></div>
+              <div className="absolute inset-0 bg-[#5C4033] border-4 border-[#3E2723] rounded-3xl shadow-[0_0_80px_rgba(0,0,0,0.8)]">
+                 <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/wood-pattern.png')] opacity-60 rounded-3xl pointer-events-none"></div>
               </div>
 
-              {/* Masanın Ön Kenar Kalınlığı */}
-              <div 
-                 className="absolute bottom-0 left-0 w-full h-[40px] bg-[#3A2518] rounded-b-[40px] border-t border-[#1a100a] shadow-[0_20px_40px_rgba(0,0,0,0.9)]"
-                 style={{ transformOrigin: 'bottom', transform: 'rotateX(-90deg)' }}
-              ></div>
+              {/* MASA BACAKLARI (Aşağıya, yani parkeye doğru inen 4 bacak) */}
+              <div className="absolute top-[20px] left-[20px] w-[20px] h-[250px] bg-[#2A1B12] rounded-b-md shadow-2xl" style={{ transformOrigin: 'top', transform: 'rotateX(90deg)' }}></div>
+              <div className="absolute top-[20px] right-[20px] w-[20px] h-[250px] bg-[#2A1B12] rounded-b-md shadow-2xl" style={{ transformOrigin: 'top', transform: 'rotateX(90deg)' }}></div>
+              <div className="absolute bottom-[20px] left-[20px] w-[24px] h-[250px] bg-[#1a100a] rounded-b-md shadow-2xl" style={{ transformOrigin: 'top', transform: 'rotateX(90deg)' }}></div>
+              <div className="absolute bottom-[20px] right-[20px] w-[24px] h-[250px] bg-[#1a100a] rounded-b-md shadow-2xl" style={{ transformOrigin: 'top', transform: 'rotateX(90deg)' }}></div>
 
-              {/* MASA BACAKLARI (Parkeye kadar uzanan 4 adet fiziksel bacak) */}
-              <div className="absolute bottom-[40px] left-[50px] w-[30px] h-[250px] bg-[#2A1B12] rounded-b-xl shadow-2xl" style={{ transformOrigin: 'top', transform: 'rotateX(-90deg)' }}></div>
-              <div className="absolute bottom-[40px] right-[50px] w-[30px] h-[250px] bg-[#2A1B12] rounded-b-xl shadow-2xl" style={{ transformOrigin: 'top', transform: 'rotateX(-90deg)' }}></div>
-              <div className="absolute top-[40px] left-[50px] w-[20px] h-[250px] bg-[#1a100a] rounded-b-xl shadow-2xl" style={{ transformOrigin: 'top', transform: 'rotateX(-90deg)' }}></div>
-              <div className="absolute top-[40px] right-[50px] w-[20px] h-[250px] bg-[#1a100a] rounded-b-xl shadow-2xl" style={{ transformOrigin: 'top', transform: 'rotateX(-90deg)' }}></div>
-
-              {/* --- MASANIN ÜZERİNDEKİ OBJELER (Hepsi dik durması için -90deg geri döndürüldü) --- */}
-              
+              {/* --- MASANIN ÜZERİNDEKİ OBJELER --- */}
               {/* 1. Tavşan 🐰 */}
               <div 
                  onClick={handleBunnyClick} 
-                 className={`absolute bottom-[100px] left-[100px] w-[140px] h-[140px] pointer-events-auto cursor-pointer transition-transform duration-300 ${bunnyBounce ? 'scale-110' : 'hover:scale-105'}`}
+                 className={`absolute bottom-[80px] left-[80px] w-[140px] h-[140px] pointer-events-auto cursor-pointer transition-transform duration-300 ${bunnyBounce ? 'scale-110' : 'hover:scale-105'}`}
                  style={{ transformStyle: 'preserve-3d', transformOrigin: 'bottom', transform: `rotateX(-90deg) ${bunnyBounce ? 'translateY(-40px)' : ''}` }}
               >
                  <img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Animals/Rabbit.png" alt="Tavşan" className="w-full h-full object-contain drop-shadow-[0_20px_15px_rgba(0,0,0,0.8)]" />
@@ -404,7 +383,7 @@ export default function TripRoomPage() {
 
               {/* 2. Çiçek 🌸 */}
               <div 
-                 className="absolute bottom-[200px] left-[380px] w-[120px] h-[120px]"
+                 className="absolute bottom-[180px] left-[340px] w-[120px] h-[120px]"
                  style={{ transformStyle: 'preserve-3d', transformOrigin: 'bottom', transform: 'rotateX(-90deg)' }}
               >
                  {roomMode === 'trip' ? (
@@ -417,7 +396,7 @@ export default function TripRoomPage() {
               {/* 3. Kahve ☕ */}
               <div 
                  onClick={handleCoffeeClick} 
-                 className="absolute bottom-[100px] right-[280px] w-[120px] h-[120px] pointer-events-auto cursor-pointer group"
+                 className="absolute bottom-[60px] right-[260px] w-[120px] h-[120px] pointer-events-auto cursor-pointer group"
                  style={{ transformStyle: 'preserve-3d', transformOrigin: 'bottom', transform: 'rotateX(-90deg)' }}
               >
                  {roomMode === 'trip' && coffeeClickCount < 5 && (
@@ -432,20 +411,18 @@ export default function TripRoomPage() {
 
               {/* 4. Çerçeve 🖼️ */}
               <div 
-                 className="absolute bottom-[80px] right-[80px] w-[130px] h-[170px] pointer-events-auto cursor-pointer transition-all duration-1000 ease-in-out"
+                 className="absolute bottom-[60px] right-[60px] w-[130px] h-[170px] pointer-events-auto cursor-pointer transition-all duration-1000 ease-in-out"
                  style={{ 
                     transformStyle: 'preserve-3d', 
                     transformOrigin: 'bottom', 
                     transform: roomMode === 'trip' ? 'rotateX(0deg) rotateZ(15deg) translateZ(2px)' : 'rotateX(-70deg) rotateZ(-10deg)' 
                  }}
               >
-                  {/* Arkası Kilitli */}
                   <div className={`absolute inset-0 bg-[#E5E5E5] flex flex-col items-center justify-center transition-opacity duration-700 border-4 border-gray-300 rounded-md shadow-2xl ${roomMode === 'trip' ? 'opacity-100 z-20' : 'opacity-0 z-0'}`}>
                      <span className="text-4xl opacity-50 drop-shadow-md">🔒</span>
                      <span className="text-gray-500 text-[9px] font-bold mt-2 uppercase tracking-widest">Kilitli Anı</span>
                   </div>
                   
-                  {/* Ön Yüzü Fotoğraf */}
                   <div className="absolute inset-0 bg-white p-2 pb-10 shadow-[0_30px_40px_rgba(0,0,0,0.8)] border border-gray-200">
                      <div className="w-full h-full bg-gray-200 overflow-hidden relative">
                         <img src="https://images.unsplash.com/photo-1511895426328-dc8714191300?q=80&w=400&auto=format&fit=crop" className="w-full h-full object-cover" alt="Mutlu Anı" />
