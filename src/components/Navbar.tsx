@@ -41,11 +41,11 @@ export default function Navbar() {
 
   const { name: themeName, icon: themeIcon } = getThemeInfo();
 
-  // YENİ SAYFAMIZ BURAYA EKLENDİ 🚀
+  // components/Navbar.tsx (İlgili kısım)
   const navLinks = [
     { name: "Ana Sayfa", href: "/home", icon: "🏠" },
     { name: "Oyun Odası", href: "/games", icon: "🎮" },
-    { name: "Trip Odası", href: "/trip-odasi", icon: "⛈️" }, 
+    { name: "Kozmik Oda", href: "/trip-odasi", icon: "🌌" }, // İSİM VE İKON DEĞİŞTİ
     { name: "Sanal Gardırop", href: "/princess", icon: "👗" }, 
     { name: "Rotamız", href: "/memories", icon: "🗺️" }, 
     { name: "Anılar & Planlar", href: "/moments", icon: "📝" },
