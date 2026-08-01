@@ -1,3 +1,4 @@
+// app/trip-odasi/page.tsx
 "use client";
 import { useState, useEffect } from "react";
 import Link from "next/link";
@@ -6,7 +7,13 @@ import { playSound } from "@/utils/audio";
 
 type ReelNote = { id: string; url: string; note: string };
 
-export default function TripRoomPage() {
+// Takımyıldızları için sabit koordinatlar (Yıldızların ekranda düzgün dağılması için)
+const STAR_COORDS = [
+  { x: 15, y: 25 }, { x: 35, y: 55 }, { x: 55, y: 15 }, { x: 75, y: 45 }, { x: 85, y: 75 },
+  { x: 25, y: 80 }, { x: 45, y: 85 }, { x: 10, y: 60 }, { x: 65, y: 65 }, { x: 90, y: 20 }
+];
+
+export default function AstroTripRoomPage() {
   const [currentUser, setCurrentUser] = useState<string>("Emircan");
   const [isLoading, setIsLoading] = useState(true);
   
@@ -25,8 +32,9 @@ export default function TripRoomPage() {
   const [newReelNote, setNewReelNote] = useState("");
   const [confirmTrash, setConfirmTrash] = useState(false);
   
-  // Peluşa vurma animasyonu state'i
-  const [isPlushHit, setIsPlushHit] = useState(false);
+  // Stres Meteoru State'i
+  const [meteorHealth, setMeteorHealth] = useState(5);
+  const [meteorHitAnim, setMeteorHitAnim] = useState(false);
 
   useEffect(() => {
     const savedName = localStorage.getItem("myName");
@@ -95,13 +103,13 @@ export default function TripRoomPage() {
   };
 
   const emptyTrash = () => {
-    playSound("click");
+    playSound("over"); // Karadelik yutma sesi gibi düşün
     setReels([]);
     setConfirmTrash(false);
     updateRoomState({ reels: [] });
   };
 
-  const sendPigeon = () => {
+  const sendComet = () => {
     if (!draftNote.trim()) return;
     playSound("success");
     setPigeonActive(true);
@@ -119,11 +127,17 @@ export default function TripRoomPage() {
     updateRoomState({ mode: "peace", pigeon_active: false });
   };
 
-  const hitPlush = () => {
-    if (roomMode === 'trip') {
-      playSound("click"); 
-      setIsPlushHit(true);
-      setTimeout(() => setIsPlushHit(false), 500);
+  const hitMeteor = () => {
+    if (meteorHealth <= 0) return;
+    playSound("click");
+    setMeteorHitAnim(true);
+    setTimeout(() => setMeteorHitAnim(false), 200);
+    
+    setMeteorHealth(prev => prev - 1);
+    
+    if (meteorHealth - 1 === 0) {
+        playSound("success"); // Patlama efekti
+        setTimeout(() => setMeteorHealth(5), 5000); // 5 saniye sonra meteor yeniden oluşur
     }
   };
 
@@ -140,245 +154,297 @@ export default function TripRoomPage() {
     return url;
   };
 
-  if (isLoading) return <div className="min-h-screen bg-black flex items-center justify-center text-pink-300 animate-pulse font-bold">Odaya Giriliyor...</div>;
+  if (isLoading) return <div className="min-h-screen bg-black flex items-center justify-center text-blue-300 animate-pulse font-bold tracking-widest uppercase">Kozmik Ağa Bağlanılıyor...</div>;
 
   return (
-    <main className="fixed inset-0 w-full h-full bg-black flex flex-col items-center justify-center font-sans overflow-hidden">
+    <main className="fixed inset-0 w-full h-full overflow-hidden bg-black flex flex-col items-center justify-center font-sans text-white">
       
-      {/* ÜST ARAYÜZ (GÜVERCİN VE MOD) */}
+      {/* ============================================================================== */}
+      {/* 🌌 ARKA PLAN VE ATMOSFER (TRİP / BARIŞMA) */}
+      {/* ============================================================================== */}
+      
+      {/* Trip Modu: Kızıl/Mor Karanlık Fırtına ve Kara Delik efekti */}
+      <div className={`absolute inset-0 transition-opacity duration-1000 z-0 ${roomMode === 'trip' ? 'opacity-100' : 'opacity-0'}`}>
+         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-[#3b0718] via-[#0a0005] to-black"></div>
+         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-red-900/10 blur-[100px] rounded-full animate-pulse"></div>
+         {/* Hafif statik / fırtına hissi */}
+         <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-30 mix-blend-screen"></div>
+      </div>
+
+      {/* Barışma Modu: Kuzey Işıkları ve Pırıl Pırıl Yıldızlar */}
+      <div className={`absolute inset-0 transition-opacity duration-1000 z-0 ${roomMode === 'peace' ? 'opacity-100' : 'opacity-0'}`}>
+         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-[#07243b] via-[#020010] to-black"></div>
+         {/* Aurora Efektleri */}
+         <div className="absolute top-[10%] left-[10%] w-[50vw] h-[30vh] bg-green-500/10 blur-[120px] rounded-full transform -rotate-45"></div>
+         <div className="absolute bottom-[20%] right-[10%] w-[40vw] h-[40vh] bg-blue-500/10 blur-[120px] rounded-full transform rotate-12"></div>
+         <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-60 mix-blend-screen"></div>
+      </div>
+
+
+      {/* ============================================================================== */}
+      {/* 🛸 ÜST ARAYÜZ */}
+      {/* ============================================================================== */}
       <div className="absolute top-5 left-5 right-5 flex justify-between z-[200] pointer-events-auto">
-        <Link href="/home" onClick={() => playSound("click")} className="px-5 py-2.5 bg-black/50 text-white rounded-2xl font-bold backdrop-blur-md border border-white/20 hover:bg-black/70 transition-colors shadow-lg">
-          ← Odadan Çık
+        <Link href="/home" onClick={() => playSound("click")} className="px-5 py-2.5 bg-white/10 text-white rounded-2xl font-bold backdrop-blur-md border border-white/20 hover:bg-white/20 transition-colors shadow-[0_0_15px_rgba(255,255,255,0.1)] text-xs uppercase tracking-widest">
+          ← Kapsüle Dön
         </Link>
         
         <div className="flex items-center gap-3">
           {currentUser === "Emircan" && roomMode === 'trip' && !pigeonActive && (
-             <button onClick={() => setIsWritingNote(true)} className="px-5 py-2.5 bg-pink-500 text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-[0_0_20px_rgba(236,72,153,0.5)] animate-pulse hover:bg-pink-600 border border-pink-400">
-               Gönül Al 🕊️
+             <button onClick={() => setIsWritingNote(true)} className="px-5 py-2.5 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-[0_0_20px_rgba(124,58,237,0.5)] animate-pulse hover:scale-105 border border-purple-400 transition-transform">
+               Dilek Yıldızı Gönder 🌠
              </button>
           )}
-          <div className={`px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-widest backdrop-blur-md border shadow-lg ${roomMode === 'trip' ? 'bg-black/80 text-blue-300 border-blue-500/30' : 'bg-white/80 text-pink-600 border-pink-400/50'}`}>
-             {roomMode === 'trip' ? 'TRİP MODU ⛈️' : 'BARIŞILDI ☀️'}
+          <div className={`px-5 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest backdrop-blur-md border shadow-lg transition-colors duration-1000 ${roomMode === 'trip' ? 'bg-red-900/30 text-red-400 border-red-500/30 shadow-[0_0_15px_rgba(239,68,68,0.2)]' : 'bg-blue-900/30 text-blue-300 border-blue-400/50 shadow-[0_0_15px_rgba(59,130,246,0.3)]'}`}>
+             {roomMode === 'trip' ? 'FIRINANIN İÇİ ⛈️' : 'HUZUR YÖRÜNGESİ ✨'}
           </div>
         </div>
       </div>
 
-      {/* MODALLAR */}
+
+      {/* ============================================================================== */}
+      {/* 🌠 MODALLAR VE DİLEK YILDIZI (POSTACI GÜVERCİN) */}
+      {/* ============================================================================== */}
+      
+      {/* Kuyruklu Yıldız Animasyonu */}
+      <style dangerouslySetInnerHTML={{__html: `
+        @keyframes comet-fly {
+          0% { transform: translate(-10vw, -10vh) rotate(45deg) scale(0.8); opacity: 0; }
+          10% { opacity: 1; }
+          50% { transform: translate(50vw, 50vh) rotate(45deg) scale(1.2); opacity: 1; }
+          90% { opacity: 1; }
+          100% { transform: translate(110vw, 110vh) rotate(45deg) scale(0.8); opacity: 0; }
+        }
+        .animate-comet { animation: comet-fly 4s linear infinite; }
+      `}} />
+
       {pigeonActive && (
-         <div className="absolute inset-0 z-[150] pointer-events-none flex items-center justify-center">
-            <div onClick={() => currentUser === 'Efsun' && setIsReadingNote(true)} className={`pointer-events-auto cursor-pointer animate-bounce absolute top-1/4 bg-white backdrop-blur-md border-4 border-pink-400 p-6 rounded-[40px] shadow-[0_0_50px_rgba(255,105,180,0.6)] flex items-center gap-4 hover:scale-110 transition-transform`}>
-               <span className="text-5xl drop-shadow-md">🕊️</span>
-               <div>
-                  <p className="text-sm font-black text-pink-600 uppercase tracking-wide">Emircan'dan Mektup Var!</p>
-                  <p className="text-xs text-gray-500 font-medium">Okumak için dokun...</p>
+         <div className="absolute inset-0 z-[150] pointer-events-none overflow-hidden">
+            <div 
+              onClick={() => currentUser === 'Efsun' && setIsReadingNote(true)} 
+              className={`absolute top-0 left-0 pointer-events-auto cursor-pointer animate-comet flex items-center justify-center group`}
+            >
+               {/* Yıldızın Kendisi ve Işık Kuyruğu */}
+               <div className="relative w-12 h-12 flex items-center justify-center z-10 hover:scale-125 transition-transform">
+                  <span className="text-4xl drop-shadow-[0_0_20px_rgba(255,255,255,1)]">🌠</span>
+                  <div className="absolute -top-10 -left-10 w-32 h-1 bg-gradient-to-r from-transparent via-white to-transparent transform -rotate-45 blur-[2px] opacity-70"></div>
                </div>
+               
+               {currentUser === 'Efsun' && (
+                 <div className="absolute top-12 whitespace-nowrap bg-black/50 backdrop-blur-md px-3 py-1 rounded-full border border-white/20 text-[8px] font-bold tracking-widest uppercase opacity-0 group-hover:opacity-100 transition-opacity">
+                    Yakala!
+                 </div>
+               )}
             </div>
          </div>
       )}
 
       {isWritingNote && (
-         <div className="fixed inset-0 z-[160] bg-black/80 flex items-center justify-center p-4 animate-in fade-in">
-            <div className="bg-white p-6 rounded-[32px] max-w-sm w-full shadow-2xl flex flex-col gap-4 border-4 border-pink-200">
-               <h3 className="text-lg font-black text-pink-600 uppercase tracking-widest text-center">Gönül Alma Notu</h3>
-               <textarea value={draftNote} onChange={(e) => setDraftNote(e.target.value)} placeholder="Prensesin gönlünü alacak tatlı bir şeyler yaz..." className="w-full h-32 bg-pink-50 border border-pink-200 rounded-2xl p-4 text-sm text-gray-800 outline-none resize-none font-medium"></textarea>
+         <div className="fixed inset-0 z-[160] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
+            <div className="bg-[#0f172a] p-6 rounded-[32px] max-w-sm w-full shadow-[0_0_50px_rgba(59,130,246,0.2)] flex flex-col gap-4 border border-blue-500/30 relative overflow-hidden">
+               <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-purple-500"></div>
+               <h3 className="text-sm font-black text-blue-400 uppercase tracking-widest text-center mt-2">Kozmik Mesaj Gönder</h3>
+               <textarea value={draftNote} onChange={(e) => setDraftNote(e.target.value)} placeholder="Yıldızların arasından süzülecek tatlı bir şeyler yaz..." className="w-full h-32 bg-black/50 border border-white/10 rounded-2xl p-4 text-xs text-white outline-none resize-none font-medium focus:border-blue-500/50 transition-colors"></textarea>
                <div className="flex gap-3">
-                  <button onClick={() => setIsWritingNote(false)} className="flex-1 py-3 bg-gray-100 rounded-xl text-xs font-bold text-gray-600 hover:bg-gray-200">İptal</button>
-                  <button onClick={sendPigeon} className="flex-1 py-3 bg-pink-500 text-white rounded-xl text-xs font-black uppercase tracking-widest shadow-lg hover:bg-pink-600">Sal 🕊️</button>
+                  <button onClick={() => setIsWritingNote(false)} className="flex-1 py-3 bg-white/5 rounded-xl text-[10px] uppercase tracking-widest font-bold text-white/50 hover:bg-white/10 transition-colors">İptal</button>
+                  <button onClick={sendComet} className="flex-1 py-3 bg-blue-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-[0_0_15px_rgba(37,99,235,0.5)] hover:bg-blue-500 transition-colors">Yıldızı Fırlat 🌠</button>
                </div>
             </div>
          </div>
       )}
 
       {isReadingNote && (
-         <div className="fixed inset-0 z-[160] bg-black/80 flex items-center justify-center p-4 animate-in zoom-in-95">
-            <div className="bg-[#FFF0F5] border-4 border-pink-300 p-8 rounded-3xl max-w-md w-full shadow-2xl relative text-gray-800 font-serif">
-               <div className="absolute -top-5 left-1/2 -translate-x-1/2 w-10 h-10 bg-red-500 rounded-full border-4 border-white shadow-md flex items-center justify-center text-white text-sm">❤️</div>
-               <span className="text-5xl text-pink-300 block mb-2 leading-none">"</span>
-               <p className="text-base leading-relaxed mb-6 font-medium whitespace-pre-wrap">{peaceMessage}</p>
-               <div className="text-right text-sm italic text-pink-600 font-bold mb-8">- Emircan</div>
-               <div className="flex gap-3 font-sans">
-                  <button onClick={() => setIsReadingNote(false)} className="flex-1 py-3.5 bg-gray-300 text-gray-700 rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-gray-400">Hala Tripliyim ⛈️</button>
-                  <button onClick={acceptPeace} className="flex-1 py-3.5 bg-green-500 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-lg hover:bg-green-600">Affettim ☀️</button>
+         <div className="fixed inset-0 z-[160] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in zoom-in-95">
+            <div className="bg-[#0f172a] border border-blue-400/30 p-8 rounded-3xl max-w-md w-full shadow-[0_0_50px_rgba(59,130,246,0.3)] relative text-white font-serif overflow-hidden">
+               <div className="absolute -top-10 -right-10 w-32 h-32 bg-blue-500/20 blur-[40px] rounded-full"></div>
+               
+               <div className="absolute -top-5 left-1/2 -translate-x-1/2 w-10 h-10 bg-blue-600 rounded-full border-4 border-[#0f172a] shadow-[0_0_15px_rgba(37,99,235,0.8)] flex items-center justify-center text-white text-sm">✨</div>
+               <span className="text-5xl text-blue-400/30 block mb-2 leading-none">"</span>
+               <p className="text-sm leading-relaxed mb-6 font-medium whitespace-pre-wrap relative z-10">{peaceMessage}</p>
+               <div className="text-right text-xs italic text-blue-300 font-bold mb-8 relative z-10">- Emircan</div>
+               <div className="flex gap-3 font-sans relative z-10">
+                  <button onClick={() => setIsReadingNote(false)} className="flex-1 py-3 bg-white/5 border border-white/10 text-white/70 rounded-xl text-[9px] font-bold uppercase tracking-widest hover:bg-white/10 transition-colors">Karanlıkta Kal ⛈️</button>
+                  <button onClick={acceptPeace} className="flex-1 py-3 bg-blue-600 text-white rounded-xl text-[9px] font-black uppercase tracking-widest shadow-[0_0_20px_rgba(37,99,235,0.5)] hover:bg-blue-500 transition-colors">Güneşi Aç ☀️</button>
                </div>
             </div>
          </div>
       )}
 
+
       {/* ============================================================================== */}
-      {/* 🏡 İNTERAKTİF FOTOĞRAF SAHNESİ (POINT & CLICK MANTIĞI) */}
+      {/* 🛰️ ETKİLEŞİMLİ UZAY İSTASYONU MODÜLLERİ */}
       {/* ============================================================================== */}
       
-      <div className="w-full h-full overflow-x-auto overflow-y-hidden flex items-center justify-start lg:justify-center custom-scrollbar">
-         {/* SAHNE KONTEYNERİ (Oranları kilitli 1200x675) */}
-         <div className="relative w-[1200px] h-[675px] shrink-0 bg-black shadow-[0_0_50px_rgba(0,0,0,0.8)]">
+      {/* SOL: MÜZİK UYDUSU (Eski Laf Sokma Duvarı) */}
+      <div className="absolute z-20 flex flex-col items-center" style={{ top: '25%', left: '10%', width: '300px' }}>
+         
+         <div className="relative flex flex-col items-center group">
+            {/* Uydu Sinyal Animasyonu */}
+            {spotifyUrl && (
+              <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[120%] h-[120%] rounded-full border border-white/10 animate-ping opacity-20 pointer-events-none ${roomMode === 'trip' ? 'border-red-500' : 'border-blue-500'}`}></div>
+            )}
             
-            {/* 1. GERÇEK ODA FOTOĞRAFI */}
-            <img 
-              src="/rosa-genc-odasi-takimi_3_c042b4f6-b05e-4054-babc-35e090ed3ca7.webp" 
-              alt="Oda" 
-              className="absolute inset-0 w-full h-full object-cover z-0 pointer-events-none select-none" 
-            />
+            {/* Holografik Ekran */}
+            <div className={`w-full bg-black/40 backdrop-blur-md rounded-2xl p-4 shadow-[0_0_30px_rgba(0,0,0,0.5)] border transition-colors duration-1000 ${roomMode === 'trip' ? 'border-red-500/20' : 'border-blue-400/20'}`}>
+               <h3 className="text-[9px] font-black uppercase tracking-widest text-center text-white/50 mb-3 flex items-center justify-center gap-2">
+                 <span>📡</span> Frekans Yayını
+               </h3>
 
-            {/* ========================================= */}
-            {/* 2. ETKİLEŞİMLİ KATMANLAR (Görünmez veya UI) */}
-            {/* ========================================= */}
-
-            {/* A) PENCERE BÖLGESİ (Buğu ve Işık Efekti) */}
-            <div className="absolute z-10 pointer-events-none" style={{ top: '18%', left: '57%', width: '13%', height: '40%' }}>
-               {roomMode === 'trip' && (
-                 <div className="absolute inset-0 backdrop-blur-md bg-white/20 transition-all duration-1000 flex items-center justify-center">
-                    <span className="text-blue-900/30 text-5xl">🌧️</span>
-                 </div>
-               )}
-            </div>
-
-            {/* B) SPOTIFY LAF SOKMA DUVARI (Sol Dolabın Aynasına Akıllı Ekran) */}
-            <div className="absolute z-20 flex flex-col items-center" style={{ top: '35%', left: '16.5%', width: '12%', height: '30%' }}>
-               <div className={`w-full h-full bg-black/60 backdrop-blur-sm rounded-lg shadow-inner border-[2px] border-white/20 flex flex-col transition-colors duration-1000 ${roomMode === 'trip' ? 'shadow-[0_0_15px_rgba(239,68,68,0.4)]' : 'shadow-[0_0_15px_rgba(236,72,153,0.4)]'}`}>
-                  <div className="flex-1 w-full relative overflow-hidden flex items-center justify-center">
-                    {spotifyUrl ? (
-                      <>
-                        <iframe src={getEmbedUrl(spotifyUrl)} width="100%" height="100%" frameBorder="0" allowFullScreen allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy"></iframe>
-                        {currentUser === "Efsun" && (
-                           <button onClick={clearSpotify} className="absolute -top-2 -right-2 w-6 h-6 bg-red-600 text-white rounded-full text-[10px] font-bold shadow-lg flex items-center justify-center hover:scale-110 z-50">X</button>
-                        )}
-                      </>
-                    ) : (
-                      <div className="text-center text-white/50">
-                        <span className="text-xl block mb-1">🎵</span>
-                        <p className="text-[8px] font-bold tracking-widest uppercase">Akıllı Ayna</p>
-                      </div>
-                    )}
-                  </div>
+               <div className="w-full h-[100px] rounded-xl overflow-hidden relative">
+                  {spotifyUrl ? (
+                    <>
+                      <iframe src={getEmbedUrl(spotifyUrl)} width="100%" height="100%" frameBorder="0" allowFullScreen allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy"></iframe>
+                      {currentUser === "Efsun" && (
+                         <button onClick={clearSpotify} className="absolute -top-2 -right-2 w-6 h-6 bg-red-600/80 backdrop-blur-sm text-white rounded-full text-[10px] font-bold shadow-lg flex items-center justify-center hover:scale-110 z-50 border border-white/20">X</button>
+                      )}
+                    </>
+                  ) : (
+                    <div className="w-full h-full border border-dashed border-white/20 rounded-xl flex flex-col items-center justify-center opacity-50">
+                      <span className="text-2xl mb-1">🔇</span>
+                      <p className="text-[8px] font-bold tracking-widest uppercase">Sinyal Yok</p>
+                    </div>
+                  )}
                </div>
 
                {currentUser === "Efsun" && !spotifyUrl && (
-                  <div className="mt-2 w-[140%] flex gap-1 z-30">
-                     <input type="text" value={newSpotify} onChange={(e) => setNewSpotify(e.target.value)} placeholder="Spotify link..." className="w-full bg-white/90 border border-gray-300 rounded p-1 text-[8px] outline-none text-black" />
-                     <button onClick={handleSpotifySubmit} className="bg-primary text-white px-2 rounded text-[8px] font-bold">Çal</button>
+                  <div className="mt-3 flex gap-2 w-full">
+                     <input type="text" value={newSpotify} onChange={(e) => setNewSpotify(e.target.value)} placeholder="Spotify link..." className="flex-1 bg-white/10 border border-white/20 rounded-lg p-2 text-[10px] outline-none text-white placeholder:text-white/30 focus:border-blue-400/50 transition-colors" />
+                     <button onClick={handleSpotifySubmit} className="bg-white/20 text-white px-3 rounded-lg text-[10px] font-bold uppercase tracking-widest hover:bg-white/30 transition-colors">Yayınla</button>
                   </div>
                )}
             </div>
-
-            {/* C) MANTAR REELS PANOSU (Masadaki Boş Duvara Monteli) */}
-            <div className="absolute z-20" style={{ top: '35%', left: '33%', width: '16%', height: '22%' }}>
-               <div className="w-full h-full bg-[#D4A373]/90 backdrop-blur-sm border-[6px] border-[#8B5A2B] rounded-sm shadow-xl p-2 overflow-y-auto custom-scrollbar relative">
-                 <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cork-board.png')] opacity-60 pointer-events-none"></div>
-                 
-                 <button onClick={() => setConfirmTrash(true)} className="absolute -bottom-1 -right-1 w-6 h-6 bg-red-500 rounded-md shadow-lg flex items-center justify-center hover:scale-110 transition-transform z-30 border border-white" title="Panoyu Temizle">
-                    <span className="text-xs">🗑️</span>
-                 </button>
-                 
-                 {confirmTrash && (
-                    <div className="absolute bottom-6 right-0 bg-white p-2 rounded-lg shadow-xl border border-red-500 z-50 w-24 text-center">
-                       <p className="text-[8px] font-bold mb-1 text-black">Emin misin?</p>
-                       <div className="flex gap-1">
-                          <button onClick={() => setConfirmTrash(false)} className="flex-1 bg-gray-200 text-black rounded text-[8px] py-1 font-bold">İptal</button>
-                          <button onClick={emptyTrash} className="flex-1 bg-red-500 text-white rounded text-[8px] py-1 font-bold">At</button>
-                       </div>
-                    </div>
-                 )}
-
-                 {reels.length === 0 ? (
-                    <div className="h-full flex items-center justify-center opacity-70 text-[#5C4033] font-bold text-center text-[10px]">Pano boş.</div>
-                 ) : (
-                    <div className="flex flex-col gap-2 relative z-10">
-                       {reels.map(reel => (
-                         <a href={reel.url} target="_blank" rel="noopener noreferrer" key={reel.id} className="block bg-[#FEFAE0] p-1.5 rounded-sm shadow-sm rotate-[-2deg] hover:rotate-1 transition-transform relative border border-[#e6debc]">
-                            <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-red-500 rounded-full shadow-sm"></div>
-                            <p className="font-serif text-[#3E2723] text-[9px] leading-tight mt-1 truncate">{reel.note || "Video"}</p>
-                         </a>
-                       ))}
-                    </div>
-                 )}
-               </div>
-
-               {/* Reels Ekleme Çekmecesi */}
-               {currentUser === "Efsun" && (
-                  <div className="absolute top-[105%] left-0 w-full bg-white/80 backdrop-blur-md p-2 rounded-lg shadow-md border border-white z-20">
-                     <input type="text" value={newReelUrl} onChange={(e) => setNewReelUrl(e.target.value)} placeholder="Reels Linki..." className="w-full bg-transparent border-b border-gray-400 pb-0.5 mb-1 text-[9px] outline-none text-black" />
-                     <input type="text" value={newReelNote} onChange={(e) => setNewReelNote(e.target.value)} placeholder="Notun..." className="w-full bg-transparent border-b border-gray-400 pb-0.5 mb-1 text-[9px] outline-none text-black" />
-                     <button onClick={handleAddReel} className="w-full py-1 bg-[#8B5A2B] text-white rounded text-[9px] font-bold uppercase tracking-widest shadow-sm">İğnele</button>
-                  </div>
-               )}
-            </div>
-
-            {/* D) KOMODİN BÖLGESİ (Kahve Fincanı ve Fotoğraf Çerçevesi) */}
-            <div className="absolute z-20 flex items-end justify-center gap-2" style={{ bottom: '26%', right: '5%', width: '12%', height: '15%' }}>
-               
-               {/* Fotoğraf Çerçevesi */}
-               <div className={`w-[45%] h-[60%] transition-all duration-1000 ease-in-out border-2 shadow-[0_5px_15px_rgba(0,0,0,0.3)] z-30 origin-bottom ${roomMode === 'trip' ? 'bg-gray-300 border-gray-400 rotate-x-[75deg] translate-y-[10px] opacity-90' : 'bg-white border-white -rotate-6'}`}>
-                  {roomMode === 'trip' ? (
-                     <div className="absolute inset-0 flex items-center justify-center">
-                        <span className="text-xs opacity-40 transform rotate-180">🔒</span>
-                     </div>
-                  ) : (
-                     <div className="absolute inset-0 p-0.5">
-                        <img src="https://images.unsplash.com/photo-1511895426328-dc8714191300?q=80&w=400&auto=format&fit=crop" className="w-full h-full object-cover rounded-sm" alt="Mutlu Anı" />
-                     </div>
-                  )}
-               </div>
-
-               {/* Kahve Fincanı & Duman */}
-               <div className="relative w-[20%] h-[30%] mb-1 z-30">
-                  {roomMode === 'trip' && (
-                     <div className="absolute -top-10 left-1/2 -translate-x-1/2 flex gap-1 pointer-events-none z-40">
-                        <div className="w-1 h-6 bg-orange-500 blur-[2px] rounded-full animate-pulse opacity-80"></div>
-                        <div className="w-1.5 h-8 bg-red-500 blur-[2px] rounded-full animate-pulse opacity-80" style={{ animationDelay: '0.2s' }}></div>
-                        <div className="w-1 h-5 bg-yellow-400 blur-[2px] rounded-full animate-pulse opacity-80" style={{ animationDelay: '0.4s' }}></div>
-                     </div>
-                  )}
-                  {/* Fincanın kendisi fotoğrafın içinde olduğu için sadece dumanı ekliyoruz. 
-                      Eğer fotoğrafta fincan yoksa sahte bir tane çizebiliriz: */}
-                  <div className="w-full h-full bg-white rounded-b-md rounded-t-sm shadow-md relative">
-                      <div className="absolute top-0 -right-2 w-2 h-3 border-2 border-white rounded-full"></div>
-                  </div>
-               </div>
-            </div>
-
-            {/* E) YERDEKİ PELUŞ OYUNCAK (Görünmez Tıklama Alanı & Vurma Efekti) */}
-            <style dangerouslySetInnerHTML={{__html: `
-              @keyframes hit-wiggle {
-                0% { transform: scale(1) rotate(0deg); }
-                20% { transform: scale(0.9) rotate(-10deg); }
-                40% { transform: scale(1.1) rotate(10deg); }
-                60% { transform: scale(0.95) rotate(-5deg); }
-                80% { transform: scale(1.05) rotate(5deg); }
-                100% { transform: scale(1) rotate(0deg); }
-              }
-              .animate-hit { animation: hit-wiggle 0.5s ease-in-out; }
-            `}} />
-            
-            {/* Fotoğraftaki peluşun tam üzerine denk gelen tıklanabilir sarsıntı alanı */}
-            <div 
-              onClick={hitPlush} 
-              className={`absolute z-30 cursor-pointer ${isPlushHit ? 'animate-hit' : ''}`} 
-              style={{ bottom: '12%', right: '15%', width: '15%', height: '15%' }}
-              title="Stres Peluşu (Vur!)"
-            >
-               {/* Sadece animasyon tetiklenince görünen ekstra çizgi film vuruş efekti eklenebilir */}
-               {isPlushHit && (
-                  <div className="absolute -top-4 -right-4 text-2xl animate-ping">💢</div>
-               )}
-            </div>
-
-            {/* ========================================= */}
-            {/* 3. ATMOSFER FİLTRELERİ (Odanın Ruh Halii) */}
-            {/* ========================================= */}
-            <div className={`absolute inset-0 pointer-events-none transition-opacity duration-1000 z-40 ${roomMode === 'trip' ? 'opacity-100' : 'opacity-0'}`}>
-               <div className="absolute inset-0 bg-[#0f172a]/60 mix-blend-multiply"></div>
-               {/* Yağmur Çizgileri */}
-               <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-20 mix-blend-screen animate-pulse"></div>
-            </div>
-
-            <div className={`absolute inset-0 pointer-events-none transition-opacity duration-1000 z-40 ${roomMode === 'peace' ? 'opacity-100' : 'opacity-0'}`}>
-               <div className="absolute inset-0 bg-yellow-500/10 mix-blend-overlay"></div>
-               {/* Güneş Işığı Hüzmesi */}
-               <div className="absolute top-[10%] right-[30%] w-[400px] h-[600px] bg-yellow-100/15 blur-[80px] rounded-full transform -rotate-45"></div>
-            </div>
-
          </div>
       </div>
+
+      {/* SAĞ: TAKIMYILDIZI (Eski Reels Panosu) */}
+      <div className="absolute z-20" style={{ top: '15%', right: '10%', width: '400px', height: '400px' }}>
+         <div className="w-full h-full relative">
+            <h3 className="absolute -top-6 right-0 text-[9px] font-black uppercase tracking-widest text-white/50 flex items-center gap-2">
+               Takımyıldızlarımız <span>✨</span>
+            </h3>
+
+            {/* Arka plan silik çizgiler (Radar hissi) */}
+            <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:40px_40px] rounded-full [mask-image:radial-gradient(ellipse_at_center,black,transparent_70%)] pointer-events-none"></div>
+
+            {/* Çöp Kutusu (Karadelik) */}
+            <button onClick={() => setConfirmTrash(true)} className="absolute -bottom-4 -right-4 w-12 h-12 bg-black border border-red-500/30 rounded-full shadow-[0_0_20px_rgba(239,68,68,0.2)] flex items-center justify-center hover:scale-110 hover:border-red-500 transition-all z-30 group" title="Yıldızları Yut">
+               <div className="absolute inset-0 rounded-full bg-red-500/10 opacity-0 group-hover:opacity-100 animate-ping"></div>
+               <span className="text-xl">🕳️</span>
+            </button>
+            
+            {confirmTrash && (
+               <div className="absolute -bottom-16 right-0 bg-black/80 backdrop-blur-md p-3 rounded-xl shadow-xl border border-red-500/50 z-50 w-36 text-center">
+                  <p className="text-[9px] font-bold mb-2 uppercase tracking-widest text-red-400">Yutulsun mu?</p>
+                  <div className="flex gap-2">
+                     <button onClick={() => setConfirmTrash(false)} className="flex-1 bg-white/10 text-white rounded-lg text-[9px] py-1.5 font-bold hover:bg-white/20">İptal</button>
+                     <button onClick={emptyTrash} className="flex-1 bg-red-600 text-white rounded-lg text-[9px] py-1.5 font-bold shadow-[0_0_10px_rgba(239,68,68,0.5)]">Evet</button>
+                  </div>
+               </div>
+            )}
+
+            {/* Yıldızlar ve Bağlantı Çizgileri */}
+            <svg className="absolute inset-0 w-full h-full pointer-events-none">
+              {reels.map((reel, index) => {
+                if (index === 0) return null;
+                const prev = STAR_COORDS[(index - 1) % STAR_COORDS.length];
+                const curr = STAR_COORDS[index % STAR_COORDS.length];
+                return (
+                  <line 
+                    key={`line-${reel.id}`} 
+                    x1={`${prev.x}%`} y1={`${prev.y}%`} 
+                    x2={`${curr.x}%`} y2={`${curr.y}%`} 
+                    stroke="rgba(255,255,255,0.2)" strokeWidth="1" strokeDasharray="4"
+                  />
+                );
+              })}
+            </svg>
+
+            {reels.length === 0 ? (
+               <div className="absolute inset-0 flex items-center justify-center opacity-30 text-white font-bold text-xs uppercase tracking-widest">Boşluk...</div>
+            ) : (
+               reels.map((reel, index) => {
+                 const coord = STAR_COORDS[index % STAR_COORDS.length];
+                 return (
+                   <a 
+                     href={reel.url} target="_blank" rel="noopener noreferrer" 
+                     key={reel.id} 
+                     className="absolute w-4 h-4 bg-white rounded-full shadow-[0_0_15px_rgba(255,255,255,0.8)] hover:scale-150 transition-transform group flex items-center justify-center cursor-pointer"
+                     style={{ left: `${coord.x}%`, top: `${coord.y}%`, transform: 'translate(-50%, -50%)' }}
+                   >
+                      <div className="absolute w-8 h-8 rounded-full border border-white/20 animate-ping opacity-50 pointer-events-none"></div>
+                      <div className="absolute top-6 whitespace-nowrap bg-black/70 backdrop-blur-sm px-2 py-1 rounded-md border border-white/10 text-[8px] font-bold opacity-0 group-hover:opacity-100 transition-opacity">
+                         {reel.note || "Bilinmeyen Yıldız"}
+                      </div>
+                   </a>
+                 );
+               })
+            )}
+
+            {/* Yıldız Ekleme Çekmecesi */}
+            {currentUser === "Efsun" && (
+               <div className="absolute top-[105%] right-0 w-[250px] bg-black/60 backdrop-blur-md p-3 rounded-2xl shadow-[0_0_20px_rgba(0,0,0,0.5)] border border-white/10 z-20">
+                  <input type="text" value={newReelUrl} onChange={(e) => setNewReelUrl(e.target.value)} placeholder="Bağlantı (URL)..." className="w-full bg-white/5 border border-white/10 rounded-lg p-2 mb-2 text-[9px] outline-none text-white focus:border-white/30 transition-colors" />
+                  <input type="text" value={newReelNote} onChange={(e) => setNewReelNote(e.target.value)} placeholder="Kısa bir not..." className="w-full bg-white/5 border border-white/10 rounded-lg p-2 mb-2 text-[9px] outline-none text-white focus:border-white/30 transition-colors" />
+                  <button onClick={handleAddReel} className="w-full py-2 bg-white/10 text-white rounded-lg text-[9px] font-bold uppercase tracking-widest hover:bg-white/20 transition-colors shadow-sm">Gökyüzüne Ekle ✨</button>
+               </div>
+            )}
+         </div>
+      </div>
+
+
+      {/* ============================================================================== */}
+      {/* 🌍 GEZEGEN VE SİLUET (Eski Çerçeve) */}
+      {/* ============================================================================== */}
+      <div className="absolute bottom-[-10%] left-1/2 -translate-x-1/2 w-[600px] h-[300px] pointer-events-none z-10 flex justify-center">
+         {/* Gezegen Yüzeyi */}
+         <div className={`w-full h-full rounded-t-[300px] bg-gradient-to-t from-black via-[#0f172a] to-[#1e293b] shadow-[0_-20px_50px_rgba(0,0,0,0.8)] relative overflow-hidden border-t border-white/10 transition-colors duration-1000 ${roomMode === 'trip' ? 'opacity-50 grayscale' : 'opacity-100'}`}>
+            <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/moon-crater.png')] opacity-30 mix-blend-overlay"></div>
+            
+            {/* Gölgeli Fotoğraf (Siluet) */}
+            <div className="absolute bottom-10 left-1/2 -translate-x-1/2 w-[120px] h-[150px] opacity-80 mix-blend-screen overflow-hidden rounded-t-full border-t border-white/20">
+               {roomMode === 'trip' ? (
+                  <div className="w-full h-full bg-black/80 flex items-center justify-center">
+                    <span className="text-white/20 text-xs uppercase tracking-widest font-bold">Karanlık</span>
+                  </div>
+               ) : (
+                  <img src="https://images.unsplash.com/photo-1511895426328-dc8714191300?q=80&w=400&auto=format&fit=crop" className="w-full h-full object-cover grayscale opacity-60" alt="Birlikte" />
+               )}
+            </div>
+         </div>
+      </div>
+
+
+      {/* ============================================================================== */}
+      {/* ☄️ SİNİR BOZUCU METEOR (Eski Peluş Tavşan) */}
+      {/* ============================================================================== */}
+      <style dangerouslySetInnerHTML={{__html: `
+        @keyframes meteor-float {
+          0% { transform: translate(0, 0) rotate(0deg); }
+          25% { transform: translate(20px, -30px) rotate(45deg); }
+          50% { transform: translate(-10px, -50px) rotate(90deg); }
+          75% { transform: translate(-30px, -20px) rotate(135deg); }
+          100% { transform: translate(0, 0) rotate(180deg); }
+        }
+        .animate-meteor { animation: meteor-float 10s ease-in-out infinite alternate; }
+        .meteor-hit { transform: scale(0.8); filter: brightness(2); }
+      `}} />
+
+      {meteorHealth > 0 && (
+         <div 
+           onClick={hitMeteor}
+           className="absolute z-30 cursor-pointer animate-meteor flex flex-col items-center justify-center"
+           style={{ bottom: '30%', right: '35%', transition: 'all 0.2s' }}
+           title="Stres Meteoru (Parçala!)"
+         >
+            {/* Çatlaklar cana göre artar */}
+            <div className={`relative flex items-center justify-center ${meteorHitAnim ? 'meteor-hit' : 'hover:scale-110'} transition-transform`}>
+               <span className="text-5xl drop-shadow-[0_0_15px_rgba(255,255,255,0.2)] grayscale opacity-80" style={{ transform: `scale(${0.8 + meteorHealth * 0.1})` }}>
+                  🥔
+               </span>
+               <div className="absolute text-white/50 text-[10px] font-black">{meteorHealth}</div>
+            </div>
+         </div>
+      )}
 
     </main>
   );
