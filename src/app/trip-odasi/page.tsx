@@ -363,7 +363,7 @@ export default function TripRoomPage() {
             </div>
 
             {/* ========================================= */}
-            {/* 3. ATMOSFER FİLTRELERİ (Odanın Ruh Hali) */}
+            {/* 3. ATMOSFER FİLTRELERİ (Odanın Ruh Halii) */}
             {/* ========================================= */}
             <div className={`absolute inset-0 pointer-events-none transition-opacity duration-1000 z-40 ${roomMode === 'trip' ? 'opacity-100' : 'opacity-0'}`}>
                <div className="absolute inset-0 bg-[#0f172a]/60 mix-blend-multiply"></div>
