@@ -1,3 +1,4 @@
+// app/trip-odasi/page.tsx
 "use client";
 import { useState, useEffect } from "react";
 import Link from "next/link";
@@ -175,18 +176,32 @@ export default function AstroTripRoomPage() {
          <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-60 mix-blend-screen"></div>
       </div>
 
-      {/* 🛸 ÜST ARAYÜZ (TAMAMEN DÜZELTİLDİ) */}
+      {/* ============================================================================== */}
+      {/* 🛸 ÜST ARAYÜZ (SOL ÜST EMİRCAN, SAĞ ÜST EFSUN) */}
+      {/* ============================================================================== */}
       <div className="absolute top-5 left-4 right-4 flex items-start justify-between z-[200] pointer-events-none">
         
-        {/* ÇIKIŞ BUTONU */}
-        <Link href="/home" onClick={() => playSound("click")} className="pointer-events-auto px-4 py-2 bg-white/10 text-white rounded-xl font-bold backdrop-blur-md border border-white/20 hover:bg-white/20 transition-colors shadow-lg text-[10px] uppercase tracking-widest">
-          ← Çık
-        </Link>
+        {/* SOL ÜST */}
+        <div className="flex flex-col items-start gap-3 pointer-events-auto">
+          <Link href="/home" onClick={() => playSound("click")} className="px-4 py-2 bg-white/10 text-white rounded-xl font-bold backdrop-blur-md border border-white/20 hover:bg-white/20 transition-colors shadow-lg text-[10px] uppercase tracking-widest">
+            ← Çık
+          </Link>
+          
+          {/* SADECE EMİRCAN GÖRECEK */}
+          {currentUser === "Emircan" && !pigeonActive && (
+             <button 
+               onClick={() => setIsWritingNote(true)} 
+               className="px-5 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-[0_0_20px_rgba(124,58,237,0.6)] animate-pulse hover:scale-105 border border-purple-300 transition-transform"
+             >
+               Dilek Yıldızı Gönder 🌠
+             </button>
+          )}
+        </div>
         
-        {/* SAĞ ÜST KONTROLLER */}
+        {/* SAĞ ÜST */}
         <div className="flex flex-col items-end gap-3 pointer-events-auto">
           
-          {/* 1. SADECE EFSUN İÇİN İKLİM/MOD DEĞİŞTİRME BUTONU */}
+          {/* SADECE EFSUN İÇİN MOD DEĞİŞTİRME BUTONU */}
           {currentUser === "Efsun" && (
             <button 
               onClick={toggleRoomMode}
@@ -196,17 +211,7 @@ export default function AstroTripRoomPage() {
             </button>
           )}
 
-          {/* 2. SADECE EMİRCAN İÇİN DİLEK YILDIZI GÖNDERME BUTONU */}
-          {currentUser === "Emircan" && !pigeonActive && (
-             <button 
-               onClick={() => setIsWritingNote(true)} 
-               className="px-5 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-[0_0_20px_rgba(124,58,237,0.6)] animate-pulse hover:scale-105 border border-purple-300 transition-transform"
-             >
-               Dilek Yıldızı Gönder 🌠
-             </button>
-          )}
-
-          {/* 3. TIKLANMAYAN MEVCUT DURUM GÖSTERGESİ */}
+          {/* HERKESİN GÖRDÜĞÜ DURUM BİLGİSİ */}
           <div className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest backdrop-blur-md border shadow-lg transition-colors duration-1000 pointer-events-none ${roomMode === 'trip' ? 'bg-red-900/40 text-red-300 border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.3)]' : 'bg-blue-900/40 text-blue-200 border-blue-400/50 shadow-[0_0_15px_rgba(59,130,246,0.4)]'}`}>
              ŞU AN: {roomMode === 'trip' ? 'FIRTINANIN İÇİ ⛈️' : 'HUZUR YÖRÜNGESİ ✨'}
           </div>
