@@ -1,7 +1,6 @@
 // app/trip-odasi/page.tsx
 "use client";
 import { useState, useEffect } from "react";
-import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import { playSound } from "@/utils/audio";
 
@@ -73,6 +72,7 @@ export default function AstroTripRoomPage() {
   };
 
   const toggleRoomMode = () => {
+    if (currentUser !== "Efsun") return; // Güvenlik önlemi
     playSound("click");
     const newMode = roomMode === "trip" ? "peace" : "trip";
     setRoomMode(newMode);
@@ -160,7 +160,7 @@ export default function AstroTripRoomPage() {
   if (isLoading) return <div className="min-h-screen bg-black flex items-center justify-center text-blue-300 animate-pulse font-bold tracking-widest uppercase">Kozmik Ağa Bağlanılıyor...</div>;
 
   return (
-    <main className="fixed inset-0 w-full h-full overflow-hidden bg-black flex flex-col font-sans text-white">
+    <main className="fixed inset-0 w-full h-full bg-black flex flex-col font-sans text-white overflow-hidden">
       
       {/* 🌌 ARKA PLAN VE ATMOSFER */}
       <div className={`absolute inset-0 transition-opacity duration-1000 pointer-events-none z-0 ${roomMode === 'trip' ? 'opacity-100' : 'opacity-0'}`}>
@@ -177,51 +177,40 @@ export default function AstroTripRoomPage() {
       </div>
 
       {/* ============================================================================== */}
-      {/* 🛸 ÜST ARAYÜZ (SOL ÜST EMİRCAN, SAĞ ÜST EFSUN) */}
+      {/* 🛸 KONTROL PANELİ (NAVBAR'IN HEMEN ALTINDA, ASLA GÖMÜLMEZ) */}
       {/* ============================================================================== */}
-      <div className="absolute top-5 left-4 right-4 flex items-start justify-between z-[200] pointer-events-none">
+      <div className="w-full flex items-center justify-between px-4 pt-20 pb-2 z-[200] relative pointer-events-none">
         
-        {/* SOL ÜST - EMİRCANIN BÖLGESİ */}
-        <div className="flex flex-col items-start gap-3 pointer-events-auto">
-          <Link href="/home" onClick={() => playSound("click")} className="px-5 py-2.5 bg-white/10 text-white rounded-xl font-bold backdrop-blur-md border border-white/20 hover:bg-white/20 transition-colors shadow-lg text-[10px] uppercase tracking-widest">
-            ← Çık
-          </Link>
-          
-          {/* SADECE EMİRCAN GÖRECEK VE TIKLAYACAK */}
+        {/* SOL ÜST - SADECE EMİRCAN */}
+        <div className="pointer-events-auto">
           {currentUser === "Emircan" && !pigeonActive && (
              <button 
                onClick={() => setIsWritingNote(true)} 
-               className="px-5 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-[0_0_20px_rgba(124,58,237,0.6)] animate-pulse hover:scale-105 border border-purple-300 transition-transform"
+               className="px-4 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-[0_0_20px_rgba(124,58,237,0.6)] animate-pulse hover:scale-105 border border-purple-300 transition-transform"
              >
-               Dilek Yıldızı Gönder 🌠
+               Dilek Yıldızı 🌠
              </button>
           )}
         </div>
         
-        {/* SAĞ ÜST - EFSUNUN BÖLGESİ / BİLGİ ALANI */}
-        <div className="flex flex-col items-end gap-3 pointer-events-auto">
-          
+        {/* SAĞ ÜST - EFSUN İÇİN BUTON, EMİRCAN İÇİN BİLGİ */}
+        <div className="pointer-events-auto">
           {currentUser === "Efsun" ? (
-            /* EFSUN İÇİN TIKLANABİLİR MOD BUTONU */
             <button 
               onClick={toggleRoomMode}
-              className={`px-5 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest backdrop-blur-md border transition-all duration-300 hover:scale-105 active:scale-95 ${roomMode === 'trip' ? 'bg-red-600 text-white border-red-400 shadow-[0_0_20px_rgba(239,68,68,0.6)]' : 'bg-blue-500 text-white border-blue-300 shadow-[0_0_20px_rgba(59,130,246,0.6)]'}`}
+              className={`px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest backdrop-blur-md border transition-all duration-300 hover:scale-105 active:scale-95 ${roomMode === 'trip' ? 'bg-red-600 text-white border-red-400 shadow-[0_0_20px_rgba(239,68,68,0.6)]' : 'bg-blue-500 text-white border-blue-300 shadow-[0_0_20px_rgba(59,130,246,0.6)]'}`}
             >
-               {roomMode === 'trip' ? 'TRİP MODU ⛈️' : 'BARIŞILDI ✨'}
+               İklimi Değiştir 🌤️⛈️
             </button>
           ) : (
-            /* EMİRCAN İÇİN TIKLANMAYAN BİLGİ EKRANI */
-            <div className={`px-5 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest backdrop-blur-md border shadow-lg transition-colors duration-1000 pointer-events-none ${roomMode === 'trip' ? 'bg-red-900/40 text-red-300 border-red-500/50' : 'bg-blue-900/40 text-blue-200 border-blue-400/50'}`}>
+            <div className={`px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest backdrop-blur-md border shadow-lg transition-colors duration-1000 pointer-events-none ${roomMode === 'trip' ? 'bg-red-900/40 text-red-300 border-red-500/50' : 'bg-blue-900/40 text-blue-200 border-blue-400/50'}`}>
                ŞU AN: {roomMode === 'trip' ? 'FIRTINA ⛈️' : 'HUZUR ✨'}
             </div>
           )}
-
         </div>
       </div>
 
-      {/* ============================================================================== */}
-      {/* 🌠 MODALLAR VE SAF CSS KUYRUKLU YILDIZ (FİZİĞİ DÜZELTİLDİ) */}
-      {/* ============================================================================== */}
+      {/* 🌠 MODALLAR VE SAF CSS KUYRUKLU YILDIZ */}
       <style dangerouslySetInnerHTML={{__html: `
         @keyframes comet-fly {
           0% { transform: translate(-30vw, -30vw) rotate(45deg); opacity: 0; }
@@ -238,9 +227,7 @@ export default function AstroTripRoomPage() {
               onClick={() => currentUser === 'Efsun' && setIsReadingNote(true)} 
               className="absolute top-0 left-0 pointer-events-auto cursor-pointer animate-comet flex items-center justify-center w-32 h-32 group"
             >
-               {/* Yıldızın Kafası */}
                <div className="relative w-4 h-4 bg-white rounded-full shadow-[0_0_20px_6px_rgba(255,255,255,0.9),0_0_40px_12px_rgba(59,130,246,0.8)] flex items-center justify-center group-hover:scale-125 transition-transform">
-                  {/* Yıldızın Kuyruğu (Arkasında kusursuz iz bırakır) */}
                   <div className="absolute top-1/2 right-2 w-64 h-[3px] bg-gradient-to-r from-transparent via-blue-200 to-white transform -translate-y-1/2 opacity-90 blur-[1px]"></div>
                </div>
                
@@ -290,12 +277,10 @@ export default function AstroTripRoomPage() {
          </div>
       )}
 
-      {/* ============================================================================== */}
-      {/* 🛸 ANA İÇERİK */}
-      {/* ============================================================================== */}
-      <div className="flex-1 w-full flex flex-col md:flex-row items-center justify-center p-4 pt-32 md:pt-4 gap-6 md:gap-12 relative z-10 overflow-y-auto md:overflow-hidden pb-32 md:pb-4">
+      {/* 🛸 ANA İÇERİK - DİKEY KAYDIRMA İLE */}
+      <div className="flex-1 w-full flex flex-col md:flex-row items-center justify-start md:justify-center p-4 gap-6 md:gap-12 relative z-10 overflow-y-auto custom-scrollbar pb-32">
          
-         <div className="w-full max-w-sm flex flex-col items-center">
+         <div className="w-full max-w-sm flex flex-col items-center mt-2">
             <div className={`w-full bg-black/50 backdrop-blur-md rounded-[32px] p-5 shadow-[0_0_30px_rgba(0,0,0,0.5)] border transition-colors duration-1000 relative ${roomMode === 'trip' ? 'border-red-500/30' : 'border-blue-400/30'}`}>
                
                {spotifyUrl && (
@@ -331,7 +316,7 @@ export default function AstroTripRoomPage() {
             </div>
          </div>
 
-         <div className="w-full max-w-sm aspect-square bg-black/30 backdrop-blur-sm border border-white/10 rounded-[40px] md:rounded-full relative flex items-center justify-center shadow-[0_0_50px_rgba(0,0,0,0.5)] mt-4 md:mt-0">
+         <div className="w-full max-w-sm aspect-square bg-black/30 backdrop-blur-sm border border-white/10 rounded-[40px] md:rounded-full relative flex items-center justify-center shadow-[0_0_50px_rgba(0,0,0,0.5)]">
             
             <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.05)_1px,transparent_1px)] bg-[size:40px_40px] rounded-[40px] md:rounded-full [mask-image:radial-gradient(ellipse_at_center,black_10%,transparent_70%)] pointer-events-none"></div>
 
@@ -343,7 +328,7 @@ export default function AstroTripRoomPage() {
             {confirmTrash && (
                <div className="absolute bottom-20 right-0 md:-bottom-20 md:-right-10 bg-black/90 backdrop-blur-xl p-4 rounded-2xl shadow-2xl border border-red-500/50 z-50 w-56 text-center animate-in zoom-in-95">
                   <p className="text-[10px] font-bold mb-3 uppercase tracking-widest text-red-400 leading-tight">
-                    Bütün yıldızlar (linkler) karadeliğe çekilip silinsin mi?
+                    Bütün yıldızlar karadeliğe çekilip silinsin mi?
                   </p>
                   <div className="flex gap-2">
                      <button onClick={() => setConfirmTrash(false)} className="flex-1 bg-white/10 text-white rounded-xl text-[10px] py-2 font-bold hover:bg-white/20 transition-colors">İptal</button>
@@ -400,10 +385,7 @@ export default function AstroTripRoomPage() {
 
       </div>
 
-      {/* ============================================================================== */}
       {/* 🌕 ALT BÖLGE: AY / GÜNEŞ */}
-      {/* ============================================================================== */}
-      
       <div className="absolute bottom-[-15%] md:bottom-[-25%] left-1/2 -translate-x-1/2 w-[300px] h-[300px] md:w-[500px] md:h-[500px] pointer-events-none z-0 flex items-center justify-center transition-all duration-1000">
          {roomMode === 'trip' ? (
             <div className="relative w-full h-full rounded-full bg-[#cbd5e1] shadow-[0_0_100px_rgba(203,213,225,0.3),inset_0_-40px_50px_rgba(0,0,0,0.8)] overflow-hidden animate-pulse" style={{ animationDuration: '4s' }}>
