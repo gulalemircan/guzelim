@@ -181,13 +181,13 @@ export default function AstroTripRoomPage() {
       {/* ============================================================================== */}
       <div className="absolute top-5 left-4 right-4 flex items-start justify-between z-[200] pointer-events-none">
         
-        {/* SOL ÜST */}
+        {/* SOL ÜST - EMİRCANIN BÖLGESİ */}
         <div className="flex flex-col items-start gap-3 pointer-events-auto">
-          <Link href="/home" onClick={() => playSound("click")} className="px-4 py-2 bg-white/10 text-white rounded-xl font-bold backdrop-blur-md border border-white/20 hover:bg-white/20 transition-colors shadow-lg text-[10px] uppercase tracking-widest">
+          <Link href="/home" onClick={() => playSound("click")} className="px-5 py-2.5 bg-white/10 text-white rounded-xl font-bold backdrop-blur-md border border-white/20 hover:bg-white/20 transition-colors shadow-lg text-[10px] uppercase tracking-widest">
             ← Çık
           </Link>
           
-          {/* SADECE EMİRCAN GÖRECEK */}
+          {/* SADECE EMİRCAN GÖRECEK VE TIKLAYACAK */}
           {currentUser === "Emircan" && !pigeonActive && (
              <button 
                onClick={() => setIsWritingNote(true)} 
@@ -198,50 +198,54 @@ export default function AstroTripRoomPage() {
           )}
         </div>
         
-        {/* SAĞ ÜST */}
+        {/* SAĞ ÜST - EFSUNUN BÖLGESİ / BİLGİ ALANI */}
         <div className="flex flex-col items-end gap-3 pointer-events-auto">
           
-          {/* SADECE EFSUN İÇİN MOD DEĞİŞTİRME BUTONU */}
-          {currentUser === "Efsun" && (
+          {currentUser === "Efsun" ? (
+            /* EFSUN İÇİN TIKLANABİLİR MOD BUTONU */
             <button 
               onClick={toggleRoomMode}
-              className="px-5 py-3 bg-gradient-to-r from-red-600 to-orange-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-[0_0_20px_rgba(239,68,68,0.6)] animate-pulse hover:scale-105 transition-transform"
+              className={`px-5 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest backdrop-blur-md border transition-all duration-300 hover:scale-105 active:scale-95 ${roomMode === 'trip' ? 'bg-red-600 text-white border-red-400 shadow-[0_0_20px_rgba(239,68,68,0.6)]' : 'bg-blue-500 text-white border-blue-300 shadow-[0_0_20px_rgba(59,130,246,0.6)]'}`}
             >
-              İklimi Değiştir 🌤️⛈️
+               {roomMode === 'trip' ? 'TRİP MODU ⛈️' : 'BARIŞILDI ✨'}
             </button>
+          ) : (
+            /* EMİRCAN İÇİN TIKLANMAYAN BİLGİ EKRANI */
+            <div className={`px-5 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest backdrop-blur-md border shadow-lg transition-colors duration-1000 pointer-events-none ${roomMode === 'trip' ? 'bg-red-900/40 text-red-300 border-red-500/50' : 'bg-blue-900/40 text-blue-200 border-blue-400/50'}`}>
+               ŞU AN: {roomMode === 'trip' ? 'FIRTINA ⛈️' : 'HUZUR ✨'}
+            </div>
           )}
-
-          {/* HERKESİN GÖRDÜĞÜ DURUM BİLGİSİ */}
-          <div className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest backdrop-blur-md border shadow-lg transition-colors duration-1000 pointer-events-none ${roomMode === 'trip' ? 'bg-red-900/40 text-red-300 border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.3)]' : 'bg-blue-900/40 text-blue-200 border-blue-400/50 shadow-[0_0_15px_rgba(59,130,246,0.4)]'}`}>
-             ŞU AN: {roomMode === 'trip' ? 'FIRTINANIN İÇİ ⛈️' : 'HUZUR YÖRÜNGESİ ✨'}
-          </div>
 
         </div>
       </div>
 
-      {/* 🌠 MODALLAR VE SAF CSS KUYRUKLU YILDIZ */}
+      {/* ============================================================================== */}
+      {/* 🌠 MODALLAR VE SAF CSS KUYRUKLU YILDIZ (FİZİĞİ DÜZELTİLDİ) */}
+      {/* ============================================================================== */}
       <style dangerouslySetInnerHTML={{__html: `
         @keyframes comet-fly {
-          0% { transform: translate(-20vw, -20vh); opacity: 0; }
+          0% { transform: translate(-30vw, -30vw) rotate(45deg); opacity: 0; }
           10% { opacity: 1; }
           90% { opacity: 1; }
-          100% { transform: translate(120vw, 120vh); opacity: 0; }
+          100% { transform: translate(150vw, 150vw) rotate(45deg); opacity: 0; }
         }
-        .animate-comet { animation: comet-fly 3.5s linear infinite; }
+        .animate-comet { animation: comet-fly 4s linear infinite; }
       `}} />
 
       {pigeonActive && (
          <div className="absolute inset-0 z-[9999] pointer-events-none overflow-hidden">
             <div 
               onClick={() => currentUser === 'Efsun' && setIsReadingNote(true)} 
-              className={`absolute top-0 left-0 pointer-events-auto cursor-pointer animate-comet flex items-center justify-center w-32 h-32 group`}
+              className="absolute top-0 left-0 pointer-events-auto cursor-pointer animate-comet flex items-center justify-center w-32 h-32 group"
             >
-               <div className="relative w-4 h-4 bg-white rounded-full shadow-[0_0_20px_6px_rgba(255,255,255,0.8),0_0_40px_12px_rgba(59,130,246,0.6)] flex items-center justify-center group-hover:scale-125 transition-transform">
-                  <div className="absolute top-1/2 right-1/2 w-48 h-[2px] bg-gradient-to-l from-transparent via-blue-300 to-white transform -translate-y-1/2 -rotate-45 origin-right opacity-80 blur-[1px]"></div>
+               {/* Yıldızın Kafası */}
+               <div className="relative w-4 h-4 bg-white rounded-full shadow-[0_0_20px_6px_rgba(255,255,255,0.9),0_0_40px_12px_rgba(59,130,246,0.8)] flex items-center justify-center group-hover:scale-125 transition-transform">
+                  {/* Yıldızın Kuyruğu (Arkasında kusursuz iz bırakır) */}
+                  <div className="absolute top-1/2 right-2 w-64 h-[3px] bg-gradient-to-r from-transparent via-blue-200 to-white transform -translate-y-1/2 opacity-90 blur-[1px]"></div>
                </div>
                
                {currentUser === 'Efsun' && (
-                 <div className="absolute top-16 left-12 whitespace-nowrap bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-lg border border-white/10 text-[8px] font-bold opacity-0 group-hover:opacity-100 transition-opacity">
+                 <div className="absolute top-16 right-16 whitespace-nowrap bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-lg border border-white/10 text-[10px] font-bold tracking-widest uppercase text-blue-200 animate-pulse drop-shadow-md" style={{ transform: 'rotate(-45deg)' }}>
                     Mektubu Aç 💌
                  </div>
                )}
@@ -250,7 +254,7 @@ export default function AstroTripRoomPage() {
       )}
 
       {isWritingNote && (
-         <div className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in">
+         <div className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in pointer-events-auto">
             <div className="bg-[#0f172a] p-6 rounded-[32px] max-w-sm w-full shadow-[0_0_50px_rgba(59,130,246,0.3)] flex flex-col gap-4 border-2 border-blue-500/50 relative overflow-hidden">
                <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-blue-400 to-purple-500"></div>
                <h3 className="text-base font-black text-blue-300 uppercase tracking-widest text-center mt-2">Kozmik Mesaj Gönder</h3>
@@ -269,7 +273,7 @@ export default function AstroTripRoomPage() {
       )}
 
       {isReadingNote && (
-         <div className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-in zoom-in-95">
+         <div className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-in zoom-in-95 pointer-events-auto">
             <div className="bg-[#0f172a] border-2 border-blue-400/50 p-8 rounded-[32px] max-w-md w-full shadow-[0_0_60px_rgba(59,130,246,0.4)] relative text-white font-serif overflow-hidden">
                <div className="absolute -top-10 -right-10 w-32 h-32 bg-blue-500/20 blur-[40px] rounded-full pointer-events-none"></div>
                <div className="absolute -top-6 left-1/2 -translate-x-1/2 w-12 h-12 bg-blue-600 rounded-full border-4 border-[#0f172a] shadow-[0_0_20px_rgba(37,99,235,0.8)] flex items-center justify-center text-white text-lg z-10">✨</div>
@@ -286,7 +290,9 @@ export default function AstroTripRoomPage() {
          </div>
       )}
 
+      {/* ============================================================================== */}
       {/* 🛸 ANA İÇERİK */}
+      {/* ============================================================================== */}
       <div className="flex-1 w-full flex flex-col md:flex-row items-center justify-center p-4 pt-32 md:pt-4 gap-6 md:gap-12 relative z-10 overflow-y-auto md:overflow-hidden pb-32 md:pb-4">
          
          <div className="w-full max-w-sm flex flex-col items-center">
@@ -394,7 +400,10 @@ export default function AstroTripRoomPage() {
 
       </div>
 
+      {/* ============================================================================== */}
       {/* 🌕 ALT BÖLGE: AY / GÜNEŞ */}
+      {/* ============================================================================== */}
+      
       <div className="absolute bottom-[-15%] md:bottom-[-25%] left-1/2 -translate-x-1/2 w-[300px] h-[300px] md:w-[500px] md:h-[500px] pointer-events-none z-0 flex items-center justify-center transition-all duration-1000">
          {roomMode === 'trip' ? (
             <div className="relative w-full h-full rounded-full bg-[#cbd5e1] shadow-[0_0_100px_rgba(203,213,225,0.3),inset_0_-40px_50px_rgba(0,0,0,0.8)] overflow-hidden animate-pulse" style={{ animationDuration: '4s' }}>
