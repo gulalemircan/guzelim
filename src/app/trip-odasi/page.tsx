@@ -1,6 +1,6 @@
-// app/trip-odasi/page.tsx
 "use client";
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import { playSound } from "@/utils/audio";
 
@@ -19,11 +19,17 @@ export default function AstroTripRoomPage() {
   const [spotifyUrl, setSpotifyUrl] = useState<string>("");
   const [reels, setReels] = useState<ReelNote[]>([]);
   
+  // Güvercin / Dilek Yıldızı State'leri
   const [pigeonActive, setPigeonActive] = useState(false);
   const [peaceMessage, setPeaceMessage] = useState("");
   const [isWritingNote, setIsWritingNote] = useState(false);
   const [isReadingNote, setIsReadingNote] = useState(false);
   const [draftNote, setDraftNote] = useState("");
+
+  // Arızalı Hologram (Efsun'un Trip Mesajı) State'leri
+  const [efsunMessage, setEfsunMessage] = useState("");
+  const [isHoloOpen, setIsHoloOpen] = useState(false);
+  const [draftEfsunMsg, setDraftEfsunMsg] = useState("");
 
   const [newSpotify, setNewSpotify] = useState("");
   const [newReelUrl, setNewReelUrl] = useState("");
@@ -45,6 +51,7 @@ export default function AstroTripRoomPage() {
           setReels(payload.new.reels || []);
           setPigeonActive(payload.new.pigeon_active || false);
           setPeaceMessage(payload.new.peace_message || "");
+          setEfsunMessage(payload.new.efsun_message || "");
         }
       })
       .subscribe();
@@ -60,8 +67,9 @@ export default function AstroTripRoomPage() {
       setReels(data.reels || []);
       setPigeonActive(data.pigeon_active || false);
       setPeaceMessage(data.peace_message || "");
+      setEfsunMessage(data.efsun_message || "");
     } else {
-      const defaultState = { id: 1, mode: "trip", spotify_url: "", reels: [], pigeon_active: false, peace_message: "" };
+      const defaultState = { id: 1, mode: "trip", spotify_url: "", reels: [], pigeon_active: false, peace_message: "", efsun_message: "" };
       await supabase.from('trip_room').upsert([defaultState]);
     }
     setIsLoading(false);
@@ -72,11 +80,19 @@ export default function AstroTripRoomPage() {
   };
 
   const toggleRoomMode = () => {
-    if (currentUser !== "Efsun") return; // Güvenlik önlemi
+    if (currentUser !== "Efsun") return; 
     playSound("click");
     const newMode = roomMode === "trip" ? "peace" : "trip";
     setRoomMode(newMode);
     updateRoomState({ mode: newMode });
+  };
+
+  // Hologram Mesajını Kaydetme (Sadece Efsun)
+  const saveEfsunMessage = () => {
+    playSound("success");
+    setEfsunMessage(draftEfsunMsg);
+    updateRoomState({ efsun_message: draftEfsunMsg });
+    setIsHoloOpen(false);
   };
 
   const handleSpotifySubmit = () => {
@@ -140,7 +156,9 @@ export default function AstroTripRoomPage() {
     setRoomMode("peace");
     setPigeonActive(false);
     setIsReadingNote(false);
-    updateRoomState({ mode: "peace", pigeon_active: false });
+    // Barışınca Efsun'un sitem mesajını da temizliyoruz
+    updateRoomState({ mode: "peace", pigeon_active: false, efsun_message: "" });
+    setEfsunMessage("");
   };
 
   const getEmbedUrl = (url: string) => {
@@ -182,7 +200,7 @@ export default function AstroTripRoomPage() {
       <div className="w-full flex items-center justify-between px-4 pt-20 pb-2 z-[200] relative pointer-events-none">
         
         {/* SOL ÜST - SADECE EMİRCAN */}
-        <div className="pointer-events-auto">
+        <div className="pointer-events-auto flex flex-col gap-2 items-start">
           {currentUser === "Emircan" && !pigeonActive && (
              <button 
                onClick={() => setIsWritingNote(true)} 
@@ -210,7 +228,105 @@ export default function AstroTripRoomPage() {
         </div>
       </div>
 
+      {/* ============================================================================== */}
+      {/* 📡 ARIZALI HOLOGRAM UYDUSU (ÜST-ORTADA YÜZEN SİNYAL) */}
+      {/* ============================================================================== */}
+      <style dangerouslySetInnerHTML={{__html: `
+        @keyframes float-satellite {
+          0% { transform: translate(-50%, 0px); }
+          50% { transform: translate(-50%, 10px); }
+          100% { transform: translate(-50%, 0px); }
+        }
+        .animate-float-sat { animation: float-satellite 4s ease-in-out infinite; }
+      `}} />
+
+      {roomMode === 'trip' && (
+         <div 
+           onClick={() => {
+              setDraftEfsunMsg(efsunMessage);
+              setIsHoloOpen(true);
+              playSound("click");
+           }}
+           className="absolute top-28 md:top-20 left-1/2 z-[150] flex flex-col items-center group cursor-pointer animate-float-sat pointer-events-auto"
+         >
+            <div className="relative w-12 h-12 flex items-center justify-center">
+               {/* Sinyal varsa etrafa yayılan kırmızı dalgalar */}
+               {efsunMessage && (
+                  <>
+                    <div className="absolute inset-0 rounded-full border-2 border-red-500 animate-ping opacity-60"></div>
+                    <div className="absolute -inset-2 rounded-full border border-red-500/50 animate-ping opacity-40" style={{animationDelay: '0.2s'}}></div>
+                  </>
+               )}
+               {/* Uydu İkonu */}
+               <div className={`w-10 h-10 rounded-full flex items-center justify-center backdrop-blur-md border transition-all duration-300 ${efsunMessage ? 'bg-red-900/60 border-red-500 shadow-[0_0_15px_rgba(239,68,68,0.8)]' : 'bg-white/10 border-white/20 group-hover:bg-white/20'}`}>
+                  <span className={`text-xl ${efsunMessage ? 'drop-shadow-[0_0_5px_rgba(255,255,255,0.8)]' : 'opacity-50'}`}>📡</span>
+               </div>
+            </div>
+            <span className={`text-[8px] font-black uppercase tracking-widest mt-2 transition-colors ${efsunMessage ? 'text-red-400 drop-shadow-[0_0_5px_rgba(239,68,68,0.8)] animate-pulse' : 'text-white/40'}`}>
+               {efsunMessage ? 'Kayıp Sinyal' : 'Uydu Ağı'}
+            </span>
+         </div>
+      )}
+
+      {/* ARIZALI HOLOGRAM MODALI (Cızırtılı Ekran) */}
+      <style dangerouslySetInnerHTML={{__html: `
+        @keyframes holo-glitch {
+          0% { text-shadow: 2px 0 rgba(255,0,0,0.8), -2px 0 rgba(0,0,255,0.8); transform: translate(0); }
+          20% { text-shadow: -2px 0 rgba(255,0,0,0.8), 2px 0 rgba(0,0,255,0.8); transform: translate(-1px, 1px); }
+          40% { text-shadow: 2px 0 rgba(255,0,0,0.8), -2px 0 rgba(0,0,255,0.8); transform: translate(1px, -1px); }
+          60% { text-shadow: -2px 0 rgba(255,0,0,0.8), 2px 0 rgba(0,0,255,0.8); transform: translate(-1px, 0); }
+          80% { text-shadow: 2px 0 rgba(255,0,0,0.8), -2px 0 rgba(0,0,255,0.8); transform: translate(1px, 1px); }
+          100% { text-shadow: -2px 0 rgba(255,0,0,0.8), 2px 0 rgba(0,0,255,0.8); transform: translate(0); }
+        }
+        .text-glitch { animation: holo-glitch 0.2s linear infinite; }
+      `}} />
+
+      {isHoloOpen && (
+         <div className="fixed inset-0 z-[9999] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 pointer-events-auto">
+            <div className="bg-[#1a0505]/90 border border-red-600/50 p-6 rounded-2xl max-w-sm w-full shadow-[0_0_50px_rgba(239,68,68,0.5),inset_0_0_20px_rgba(239,68,68,0.2)] relative overflow-hidden animate-in zoom-in-95 duration-200">
+               
+               {/* Hologram Tarama Çizgileri (Scanlines) */}
+               <div className="absolute inset-0 bg-[linear-gradient(rgba(255,0,0,0.05)_1px,transparent_1px)] bg-[size:100%_4px] pointer-events-none"></div>
+               <div className="absolute inset-0 bg-red-500/5 mix-blend-overlay animate-pulse pointer-events-none"></div>
+
+               <button onClick={() => setIsHoloOpen(false)} className="absolute top-3 right-4 text-red-500 hover:text-red-400 font-black text-sm z-10 transition-colors">X</button>
+               
+               <h3 className="text-red-500 text-[10px] font-black uppercase tracking-widest mb-4 flex items-center gap-2">
+                  <span className="animate-ping">⚠️</span> BAĞLANTI KOPTU - SON MESAJ
+               </h3>
+               
+               {currentUser === 'Efsun' ? (
+                  <div className="relative z-10 flex flex-col gap-3">
+                     <textarea 
+                        value={draftEfsunMsg} 
+                        onChange={e => setDraftEfsunMsg(e.target.value)} 
+                        className="w-full h-28 bg-black/60 border border-red-500/30 text-red-300 p-3 text-xs outline-none focus:border-red-500 resize-none font-mono placeholder:text-red-900/50" 
+                        placeholder="Emircan'a sitemini uzay boşluğuna bırak..."
+                     />
+                     <div className="flex gap-2">
+                        <button onClick={() => setIsHoloOpen(false)} className="flex-1 py-2.5 bg-transparent border border-red-900/50 text-red-500/70 hover:text-red-400 text-[10px] font-bold uppercase tracking-widest transition-colors">İptal</button>
+                        <button onClick={saveEfsunMessage} className="flex-1 py-2.5 bg-red-900/40 hover:bg-red-800/60 border border-red-500 text-red-200 text-[10px] font-black uppercase tracking-widest transition-colors shadow-[0_0_15px_rgba(239,68,68,0.3)]">YAYINA VER 📡</button>
+                     </div>
+                  </div>
+               ) : (
+                  <div className="relative z-10 font-mono text-sm text-red-400 min-h-[100px] flex items-center justify-center p-4 bg-black/40 border border-red-900/30 rounded-lg">
+                     {efsunMessage ? (
+                        <p className="whitespace-pre-wrap text-glitch tracking-wide leading-relaxed text-center">
+                           {efsunMessage}
+                        </p>
+                     ) : (
+                        <p className="text-red-900/40 italic text-xs uppercase tracking-widest">Sinyal boş, mesaj yok...</p>
+                     )}
+                  </div>
+               )}
+            </div>
+         </div>
+      )}
+
+
+      {/* ============================================================================== */}
       {/* 🌠 MODALLAR VE SAF CSS KUYRUKLU YILDIZ */}
+      {/* ============================================================================== */}
       <style dangerouslySetInnerHTML={{__html: `
         @keyframes comet-fly {
           0% { transform: translate(-30vw, -30vw) rotate(45deg); opacity: 0; }
@@ -277,8 +393,10 @@ export default function AstroTripRoomPage() {
          </div>
       )}
 
+      {/* ============================================================================== */}
       {/* 🛸 ANA İÇERİK - DİKEY KAYDIRMA İLE */}
-      <div className="flex-1 w-full flex flex-col md:flex-row items-center justify-start md:justify-center p-4 gap-6 md:gap-12 relative z-10 overflow-y-auto custom-scrollbar pb-32">
+      {/* ============================================================================== */}
+      <div className="flex-1 w-full flex flex-col md:flex-row items-center justify-start md:justify-center p-4 gap-6 md:gap-12 relative z-10 overflow-y-auto custom-scrollbar pt-28 pb-32">
          
          <div className="w-full max-w-sm flex flex-col items-center mt-2">
             <div className={`w-full bg-black/50 backdrop-blur-md rounded-[32px] p-5 shadow-[0_0_30px_rgba(0,0,0,0.5)] border transition-colors duration-1000 relative ${roomMode === 'trip' ? 'border-red-500/30' : 'border-blue-400/30'}`}>
