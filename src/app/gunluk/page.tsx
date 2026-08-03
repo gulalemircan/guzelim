@@ -3,12 +3,10 @@ import { useState, useEffect, forwardRef } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { playSound } from "@/utils/audio";
-// import { supabase } from "@/lib/supabaseClient";
 
 // @ts-ignore
 const HTMLFlipBook = dynamic(() => import("react-pageflip"), { ssr: false });
 
-// KİTAP SAYFASI BİLEŞENİ
 const Page = forwardRef<HTMLDivElement, any>((props, ref) => {
   return (
     <div className="page bg-[#f4e4bc] shadow-[inset_0_0_20px_rgba(0,0,0,0.15)] border-r border-black/10 overflow-hidden relative" ref={ref}>
@@ -28,7 +26,6 @@ export default function DiaryPage() {
   const [currentUser, setCurrentUser] = useState("Emircan");
   const [entries, setEntries] = useState<any[]>([]);
   
-  // Modal State'leri
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [draftDate, setDraftDate] = useState("");
@@ -39,7 +36,6 @@ export default function DiaryPage() {
     const savedName = localStorage.getItem("myName");
     if (savedName) setCurrentUser(savedName);
     
-    // Supabase'den çekmeden önceki test verileri
     setEntries([
       { 
         id: 1, 
@@ -50,7 +46,6 @@ export default function DiaryPage() {
     ]);
   }, []);
 
-  // Modal Açma Fonksiyonları
   const openNewEntryModal = () => {
     playSound("click");
     setEditingId(null);
@@ -69,7 +64,6 @@ export default function DiaryPage() {
     setIsModalOpen(true);
   };
 
-  // Kaydetme ve Silme
   const handleSave = () => {
     playSound("success");
     if (editingId) {
@@ -88,25 +82,25 @@ export default function DiaryPage() {
     setIsModalOpen(false);
   };
 
-  // 3D Sayfa Çevirmeyi Engellemeden Tıklama Yapmak İçin Ortak Helper (Büyü burada)
-  const stopEvent = (e: React.PointerEvent | React.MouseEvent | React.TouchEvent) => {
-    e.stopPropagation();
-  };
+  // KİTAP TOPLAM SAYFA HESABI (3D motorun çökmemesi için her zaman çift sayı olmalı)
+  // Kapak (1) + Girişler (entries.length) + Kalem (1) + Arka Kapak (1)
+  const totalBasePages = 1 + entries.length + 1 + 1;
+  const needsBlankPage = totalBasePages % 2 !== 0; // Tek sayıysa 1 boş sayfa ekle
 
   return (
     <main className="min-h-screen bg-[#1c1917] flex flex-col items-center justify-center p-2 overflow-hidden relative font-serif">
-      {/* Arka Plan Ahşap Masa */}
       <div className="absolute inset-0 opacity-20 pointer-events-none bg-[url('https://www.transparenttextures.com/patterns/wood-pattern.png')]"></div>
       
-      {/* Çıkış Butonu */}
       <Link href="/home" onClick={() => playSound("click")} className="absolute top-5 left-4 z-[100] px-4 py-2 bg-black/50 text-[#f4e4bc] rounded-xl font-bold backdrop-blur-md border border-[#f4e4bc]/20 hover:bg-black/70 transition-colors shadow-lg text-[10px] uppercase tracking-widest">
         ← Masadan Kalk
       </Link>
 
       <div className="relative w-full max-w-4xl flex items-center justify-center mt-12 scale-[0.85] sm:scale-95 md:scale-100">
         
+        {/* Kitap boyutu değiştiğinde çökmemesi için KEY atadık, motor kendini yeniliyor */}
         {/* @ts-ignore */}
         <HTMLFlipBook 
+          key={entries.length} 
           width={320} 
           height={480} 
           size="stretch"
@@ -117,39 +111,41 @@ export default function DiaryPage() {
           maxShadowOpacity={0.5}
           showCover={true}
           mobileScrollSupport={true}
-          usePortrait={true} // TELEFON İÇİN TEK SAYFA MODU (Kilit Nokta)
+          usePortrait={true}
           className="shadow-2xl drop-shadow-[0_20px_50px_rgba(0,0,0,0.8)]"
         >
           
           {/* ======================================= */}
-          {/* 📓 1. KAPAK (SADECE E & E YAZACAK) */}
+          {/* 📓 1. KAPAK (SADECE DERİ VE YAZI) */}
           {/* ======================================= */}
-          <div className="page page-cover bg-[#3e2723] rounded-l-lg shadow-[inset_-10px_0_20px_rgba(0,0,0,0.5)] border-l-4 border-[#2b1b18] overflow-hidden relative flex flex-col items-center justify-center cursor-pointer">
+          <div className="page page-cover bg-[#3e2723] rounded-l-lg shadow-[inset_-10px_0_20px_rgba(0,0,0,0.5)] border-l-4 border-[#2b1b18] overflow-hidden relative flex items-center justify-center cursor-pointer">
              <div className="absolute inset-0 opacity-50 pointer-events-none bg-[url('https://www.transparenttextures.com/patterns/leather.png')]"></div>
-             <div className="relative z-10 w-3/4 h-3/4 border border-[#d4af37]/20 rounded-lg flex flex-col items-center justify-center p-4 bg-black/5 shadow-inner">
-                <h1 className="text-6xl md:text-7xl text-[#d4af37] font-black drop-shadow-[0_4px_10px_rgba(0,0,0,0.8)]" style={{ fontFamily: 'Georgia, serif' }}>
+             
+             {/* İç Çerçeveyi Kaldırdık, Sadece Parlayan Asil Bir Yazı */}
+             <div className="relative z-10 w-full flex items-center justify-center">
+                <h1 className="text-7xl md:text-8xl text-[#d4af37] font-black drop-shadow-[0_4px_10px_rgba(0,0,0,0.8)]" style={{ fontFamily: 'Georgia, serif' }}>
                   E & E
                 </h1>
              </div>
           </div>
 
           {/* ======================================= */}
-          {/* 📄 İÇ SAYFALAR VE DÜZENLE BUTONLARI */}
+          {/* 📄 İÇ SAYFALAR */}
           {/* ======================================= */}
           {entries.map((entry, index) => (
             <Page key={entry.id} number={index + 1}>
                
-               {/* Sadece yazıyı ekleyen veya Efsun ise düzenleyebilir mantığı eklenebilir, şimdilik ikiniz de düzenleyebilirsiniz */}
                <button
-                 onPointerDown={stopEvent} onMouseDown={stopEvent} onTouchStart={stopEvent}
-                 onClick={(e) => { stopEvent(e); openEditModal(entry); }}
+                 onPointerDownCapture={(e) => e.stopPropagation()} 
+                 onClickCapture={(e) => { e.stopPropagation(); e.preventDefault(); openEditModal(entry); }}
                  className="absolute top-4 right-4 z-50 w-8 h-8 bg-black/5 hover:bg-black/10 text-black/60 rounded-full flex items-center justify-center transition-colors cursor-pointer border border-black/10"
                  title="Sayfayı Düzenle"
                >
                  ✏️
                </button>
 
-               {entry.imageUrl && (
+               {/* Fotoğraf Kontrolü (Hatalı/Boş linkte 404 yememek için) */}
+               {entry.imageUrl && entry.imageUrl.trim().length > 5 && (
                  <div className="relative w-full bg-white p-2 md:p-3 pb-6 md:pb-8 mb-4 shadow-md transform rotate-1 hover:rotate-0 transition-transform duration-300 pointer-events-none mt-2">
                     <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-16 h-5 bg-white/40 backdrop-blur-sm shadow-sm transform -rotate-2"></div>
                     <img src={entry.imageUrl} alt="anı" className="w-full h-36 md:h-44 object-cover bg-black/5" />
@@ -168,20 +164,31 @@ export default function DiaryPage() {
           ))}
 
           {/* ======================================= */}
-          {/* 📄 YENİ SAYFA EKLEME BUTONU */}
+          {/* 📄 YENİ SAYFA EKLEME BUTONU (Kalem) */}
           {/* ======================================= */}
           <Page number={entries.length + 1}>
-             <div 
-               onPointerDown={stopEvent} onMouseDown={stopEvent} onTouchStart={stopEvent}
-               onClick={(e) => { stopEvent(e); openNewEntryModal(); }}
-               className="w-full h-full flex flex-col items-center justify-center border-2 border-dashed border-red-900/20 rounded-xl bg-black/5 hover:bg-black/10 cursor-pointer transition-colors group relative z-50"
+             <button 
+               onPointerDownCapture={(e) => e.stopPropagation()} 
+               onClickCapture={(e) => { e.stopPropagation(); e.preventDefault(); openNewEntryModal(); }}
+               className="w-full h-full flex flex-col items-center justify-center border-2 border-dashed border-red-900/20 rounded-xl bg-black/5 hover:bg-black/10 cursor-pointer transition-colors group relative z-50 outline-none"
              >
                 <span className="text-4xl md:text-5xl opacity-40 group-hover:opacity-70 group-hover:scale-110 transition-all drop-shadow-sm">🖋️</span>
                 <p className="text-red-900/50 text-[10px] md:text-xs font-bold uppercase tracking-widest mt-4 group-hover:text-red-900/70 transition-colors">Deftere Yaz</p>
-             </div>
+             </button>
           </Page>
 
+          {/* 3D Motorun Çökmemesi İçin Otomatik Boş Sayfa Dengeleyici */}
+          {needsBlankPage && (
+             <Page number="">
+                <div className="w-full h-full flex items-center justify-center opacity-30 text-[10px] uppercase font-bold text-black">
+                   (Boş Sayfa)
+                </div>
+             </Page>
+          )}
+
+          {/* ======================================= */}
           {/* 📓 ARKA KAPAK (DERİ) */}
+          {/* ======================================= */}
           <div className="page page-cover bg-[#3e2723] rounded-r-lg shadow-[inset_10px_0_20px_rgba(0,0,0,0.5)] border-r-4 border-[#2b1b18] overflow-hidden relative">
              <div className="absolute inset-0 opacity-50 pointer-events-none bg-[url('https://www.transparenttextures.com/patterns/leather.png')]"></div>
           </div>
@@ -194,8 +201,7 @@ export default function DiaryPage() {
       {/* ============================================================================== */}
       {isModalOpen && (
          <div className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in">
-            <div className="bg-[#f4e4bc] p-6 rounded-2xl max-w-sm w-full shadow-2xl relative border-2 border-[#d4af37]/30 flex flex-col gap-4">
-               {/* Modal Arka Plan Dokusu */}
+            <div className="bg-[#f4e4bc] p-6 rounded-2xl max-w-sm w-full shadow-2xl relative border-2 border-[#d4af37]/30 flex flex-col gap-4 pointer-events-auto">
                <div className="absolute inset-0 opacity-40 mix-blend-multiply pointer-events-none bg-[url('https://www.transparenttextures.com/patterns/aged-paper.png')] rounded-2xl"></div>
                
                <div className="relative z-10 flex flex-col gap-4">
