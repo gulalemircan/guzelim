@@ -3,6 +3,7 @@ import { useState, useEffect, forwardRef } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { playSound } from "@/utils/audio";
+import { supabase } from "@/lib/supabaseClient";
 
 // @ts-ignore
 const HTMLFlipBook = dynamic(() => import("react-pageflip"), { ssr: false });
@@ -25,6 +26,7 @@ Page.displayName = 'Page';
 export default function DiaryPage() {
   const [currentUser, setCurrentUser] = useState("Emircan");
   const [entries, setEntries] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -36,15 +38,28 @@ export default function DiaryPage() {
     const savedName = localStorage.getItem("myName");
     if (savedName) setCurrentUser(savedName);
     
-    setEntries([
-      { 
-        id: 1, 
-        date: "3 Ağustos 2026", 
-        text: "Kozmik odadan çıkıp gerçek anılara yelken açtığımız o ilk gün... Bu defter bizim yeni rotamızın şahidi olacak.", 
-        imageUrl: "https://images.unsplash.com/photo-1518199266791-5375a83164ba?w=500&q=80"
-      }
-    ]);
+    fetchEntries();
+
+    // SUPABASE REALTIME BAĞLANTISI (Anlık Senkronizasyon)
+    const channel = supabase
+      .channel('diary_sync')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'diary_entries' }, (payload) => {
+         // Veritabanında bir şey değiştiğinde anında listeyi yenile
+         fetchEntries();
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
   }, []);
+
+  const fetchEntries = async () => {
+    // Supabase'den tüm anıları ID sırasına göre çek
+    const { data, error } = await supabase.from('diary_entries').select('*').order('id', { ascending: true });
+    if (data) {
+      setEntries(data);
+    }
+    setIsLoading(false);
+  };
 
   const openNewEntryModal = () => {
     playSound("click");
@@ -58,34 +73,48 @@ export default function DiaryPage() {
   const openEditModal = (entry: any) => {
     playSound("click");
     setEditingId(entry.id);
-    setDraftDate(entry.date);
-    setDraftText(entry.text);
-    setDraftImage(entry.imageUrl || "");
+    setDraftDate(entry.date || "");
+    setDraftText(entry.text || "");
+    setDraftImage(entry.image_url || "");
     setIsModalOpen(true);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     playSound("success");
-    if (editingId) {
-      setEntries(entries.map(e => e.id === editingId ? { ...e, date: draftDate, text: draftText, imageUrl: draftImage } : e));
-    } else {
-      const newEntry = { id: Date.now(), date: draftDate, text: draftText, imageUrl: draftImage };
-      setEntries([...entries, newEntry]);
-    }
     setIsModalOpen(false);
+
+    if (editingId) {
+      // Mevcut sayfayı güncelle
+      await supabase.from('diary_entries')
+        .update({ date: draftDate, text: draftText, image_url: draftImage })
+        .eq('id', editingId);
+    } else {
+      // Yeni sayfa oluştur
+      await supabase.from('diary_entries')
+        .insert([{ date: draftDate, text: draftText, image_url: draftImage }]);
+    }
   };
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (!editingId) return;
     playSound("over");
-    setEntries(entries.filter(e => e.id !== editingId));
     setIsModalOpen(false);
+    
+    // Supabase'den sil
+    await supabase.from('diary_entries').delete().eq('id', editingId);
   };
 
-  // KİTAP TOPLAM SAYFA HESABI (3D motorun çökmemesi için her zaman çift sayı olmalı)
-  // Kapak (1) + Girişler (entries.length) + Kalem (1) + Arka Kapak (1)
   const totalBasePages = 1 + entries.length + 1 + 1;
-  const needsBlankPage = totalBasePages % 2 !== 0; // Tek sayıysa 1 boş sayfa ekle
+  const needsBlankPage = totalBasePages % 2 !== 0;
+
+  // Yükleme Ekranı (404/Çökme sorununu kökten çözer)
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-[#1c1917] flex items-center justify-center text-[#d4af37] font-serif uppercase tracking-widest animate-pulse font-bold">
+        Defter Raftan Alınıyor...
+      </div>
+    );
+  }
 
   return (
     <main className="min-h-screen bg-[#1c1917] flex flex-col items-center justify-center p-2 overflow-hidden relative font-serif">
@@ -97,7 +126,6 @@ export default function DiaryPage() {
 
       <div className="relative w-full max-w-4xl flex items-center justify-center mt-12 scale-[0.85] sm:scale-95 md:scale-100">
         
-        {/* Kitap boyutu değiştiğinde çökmemesi için KEY atadık, motor kendini yeniliyor */}
         {/* @ts-ignore */}
         <HTMLFlipBook 
           key={entries.length} 
@@ -115,13 +143,8 @@ export default function DiaryPage() {
           className="shadow-2xl drop-shadow-[0_20px_50px_rgba(0,0,0,0.8)]"
         >
           
-          {/* ======================================= */}
-          {/* 📓 1. KAPAK (SADECE DERİ VE YAZI) */}
-          {/* ======================================= */}
           <div className="page page-cover bg-[#3e2723] rounded-l-lg shadow-[inset_-10px_0_20px_rgba(0,0,0,0.5)] border-l-4 border-[#2b1b18] overflow-hidden relative flex items-center justify-center cursor-pointer">
              <div className="absolute inset-0 opacity-50 pointer-events-none bg-[url('https://www.transparenttextures.com/patterns/leather.png')]"></div>
-             
-             {/* İç Çerçeveyi Kaldırdık, Sadece Parlayan Asil Bir Yazı */}
              <div className="relative z-10 w-full flex items-center justify-center">
                 <h1 className="text-7xl md:text-8xl text-[#d4af37] font-black drop-shadow-[0_4px_10px_rgba(0,0,0,0.8)]" style={{ fontFamily: 'Georgia, serif' }}>
                   E & E
@@ -129,12 +152,8 @@ export default function DiaryPage() {
              </div>
           </div>
 
-          {/* ======================================= */}
-          {/* 📄 İÇ SAYFALAR */}
-          {/* ======================================= */}
           {entries.map((entry, index) => (
             <Page key={entry.id} number={index + 1}>
-               
                <button
                  onPointerDownCapture={(e) => e.stopPropagation()} 
                  onClickCapture={(e) => { e.stopPropagation(); e.preventDefault(); openEditModal(entry); }}
@@ -144,11 +163,10 @@ export default function DiaryPage() {
                  ✏️
                </button>
 
-               {/* Fotoğraf Kontrolü (Hatalı/Boş linkte 404 yememek için) */}
-               {entry.imageUrl && entry.imageUrl.trim().length > 5 && (
+               {entry.image_url && entry.image_url.trim().length > 5 && (
                  <div className="relative w-full bg-white p-2 md:p-3 pb-6 md:pb-8 mb-4 shadow-md transform rotate-1 hover:rotate-0 transition-transform duration-300 pointer-events-none mt-2">
                     <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-16 h-5 bg-white/40 backdrop-blur-sm shadow-sm transform -rotate-2"></div>
-                    <img src={entry.imageUrl} alt="anı" className="w-full h-36 md:h-44 object-cover bg-black/5" />
+                    <img src={entry.image_url} alt="anı" className="w-full h-36 md:h-44 object-cover bg-black/5" />
                  </div>
                )}
 
@@ -163,9 +181,6 @@ export default function DiaryPage() {
             </Page>
           ))}
 
-          {/* ======================================= */}
-          {/* 📄 YENİ SAYFA EKLEME BUTONU (Kalem) */}
-          {/* ======================================= */}
           <Page number={entries.length + 1}>
              <button 
                onPointerDownCapture={(e) => e.stopPropagation()} 
@@ -177,7 +192,6 @@ export default function DiaryPage() {
              </button>
           </Page>
 
-          {/* 3D Motorun Çökmemesi İçin Otomatik Boş Sayfa Dengeleyici */}
           {needsBlankPage && (
              <Page number="">
                 <div className="w-full h-full flex items-center justify-center opacity-30 text-[10px] uppercase font-bold text-black">
@@ -186,9 +200,6 @@ export default function DiaryPage() {
              </Page>
           )}
 
-          {/* ======================================= */}
-          {/* 📓 ARKA KAPAK (DERİ) */}
-          {/* ======================================= */}
           <div className="page page-cover bg-[#3e2723] rounded-r-lg shadow-[inset_10px_0_20px_rgba(0,0,0,0.5)] border-r-4 border-[#2b1b18] overflow-hidden relative">
              <div className="absolute inset-0 opacity-50 pointer-events-none bg-[url('https://www.transparenttextures.com/patterns/leather.png')]"></div>
           </div>
@@ -196,9 +207,6 @@ export default function DiaryPage() {
         </HTMLFlipBook>
       </div>
 
-      {/* ============================================================================== */}
-      {/* 📝 YENİ ANI / DÜZENLEME MODALI */}
-      {/* ============================================================================== */}
       {isModalOpen && (
          <div className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in">
             <div className="bg-[#f4e4bc] p-6 rounded-2xl max-w-sm w-full shadow-2xl relative border-2 border-[#d4af37]/30 flex flex-col gap-4 pointer-events-auto">
