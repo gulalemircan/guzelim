@@ -5,19 +5,22 @@ import Link from "next/link";
 import { playSound } from "@/utils/audio";
 import { supabase } from "@/lib/supabaseClient";
 
+// 3D Motoru dinamik olarak yüklüyoruz
 // @ts-ignore
 const HTMLFlipBook = dynamic(() => import("react-pageflip"), { ssr: false });
 
+// YENİ, TERTEMİZ İÇ SAYFA TASARIMI
 const Page = forwardRef<HTMLDivElement, any>((props, ref) => {
   return (
-    <div className="page bg-[#f4e4bc] shadow-[inset_0_0_20px_rgba(0,0,0,0.15)] border-r border-black/10 overflow-hidden relative" ref={ref}>
-      <div className="absolute inset-0 opacity-50 mix-blend-multiply pointer-events-none bg-[url('https://www.transparenttextures.com/patterns/aged-paper.png')]"></div>
-      <div className="relative z-10 w-full h-full p-5 md:p-8 flex flex-col">
+    <div className="page bg-[#faf8f5] shadow-[inset_0_0_15px_rgba(0,0,0,0.05)] border-r border-black/5 overflow-hidden relative" ref={ref}>
+      <div className="relative z-10 w-full h-full p-6 md:p-8 flex flex-col">
         {props.children}
       </div>
-      <div className="absolute bottom-4 right-5 text-[10px] font-serif text-black/40 font-bold pointer-events-none">
-        {props.number}
-      </div>
+      {props.number && (
+        <div className="absolute bottom-4 right-5 text-[10px] font-sans text-black/30 font-bold pointer-events-none">
+          {props.number}
+        </div>
+      )}
     </div>
   );
 });
@@ -40,11 +43,9 @@ export default function DiaryPage() {
     
     fetchEntries();
 
-    // SUPABASE REALTIME BAĞLANTISI (Anlık Senkronizasyon)
     const channel = supabase
       .channel('diary_sync')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'diary_entries' }, (payload) => {
-         // Veritabanında bir şey değiştiğinde anında listeyi yenile
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'diary_entries' }, () => {
          fetchEntries();
       })
       .subscribe();
@@ -53,11 +54,8 @@ export default function DiaryPage() {
   }, []);
 
   const fetchEntries = async () => {
-    // Supabase'den tüm anıları ID sırasına göre çek
-    const { data, error } = await supabase.from('diary_entries').select('*').order('id', { ascending: true });
-    if (data) {
-      setEntries(data);
-    }
+    const { data } = await supabase.from('diary_entries').select('*').order('id', { ascending: true });
+    if (data) setEntries(data);
     setIsLoading(false);
   };
 
@@ -82,16 +80,10 @@ export default function DiaryPage() {
   const handleSave = async () => {
     playSound("success");
     setIsModalOpen(false);
-
     if (editingId) {
-      // Mevcut sayfayı güncelle
-      await supabase.from('diary_entries')
-        .update({ date: draftDate, text: draftText, image_url: draftImage })
-        .eq('id', editingId);
+      await supabase.from('diary_entries').update({ date: draftDate, text: draftText, image_url: draftImage }).eq('id', editingId);
     } else {
-      // Yeni sayfa oluştur
-      await supabase.from('diary_entries')
-        .insert([{ date: draftDate, text: draftText, image_url: draftImage }]);
+      await supabase.from('diary_entries').insert([{ date: draftDate, text: draftText, image_url: draftImage }]);
     }
   };
 
@@ -99,32 +91,129 @@ export default function DiaryPage() {
     if (!editingId) return;
     playSound("over");
     setIsModalOpen(false);
-    
-    // Supabase'den sil
     await supabase.from('diary_entries').delete().eq('id', editingId);
   };
 
-  const totalBasePages = 1 + entries.length + 1 + 1;
-  const needsBlankPage = totalBasePages % 2 !== 0;
+  // =====================================================================
+  // ÇÖKME ÖNLEYİCİ ALGORİTMA: Kitabın fiziksel yapısını sıfırdan kuruyoruz
+  // =====================================================================
+  const renderBookPages = () => {
+    const pages = [];
 
-  // Yükleme Ekranı (404/Çökme sorununu kökten çözer)
+    // 1. ÖN KAPAK (Mat Siyah & Altın)
+    pages.push(
+      <div key="cover-front" className="page page-cover bg-gradient-to-br from-[#1a1a1a] to-[#0a0a0a] rounded-l-xl shadow-[inset_-5px_0_20px_rgba(0,0,0,0.8)] border-l border-[#2b2b2b] overflow-hidden relative flex items-center justify-center">
+         <div className="relative z-10 w-full flex items-center justify-center">
+            <h1 className="text-6xl md:text-7xl text-[#d4af37] font-black tracking-widest drop-shadow-[0_2px_15px_rgba(212,175,55,0.2)]" style={{ fontFamily: 'Georgia, serif' }}>
+              E & E
+            </h1>
+         </div>
+      </div>
+    );
+
+    // 2. ÖN İÇ KAPAK (Boş, premium hissi için)
+    pages.push(
+      <Page key="cover-inside-front" number="">
+         <div className="w-full h-full flex flex-col items-center justify-center opacity-10 border-2 border-dashed border-black/20 rounded-xl">
+            <span className="text-3xl mb-2">✦</span>
+         </div>
+      </Page>
+    );
+
+    // 3. ANILAR (Kullanıcı girdileri)
+    entries.forEach((entry, index) => {
+      pages.push(
+        <Page key={`entry-${entry.id}`} number={index + 1}>
+           <button
+             onPointerDownCapture={(e) => e.stopPropagation()} 
+             onClickCapture={(e) => { e.stopPropagation(); e.preventDefault(); openEditModal(entry); }}
+             className="absolute top-4 right-4 z-50 w-8 h-8 bg-black/5 hover:bg-black/10 text-black/50 rounded-full flex items-center justify-center transition-colors cursor-pointer"
+           >
+             ✏️
+           </button>
+
+           {entry.image_url && entry.image_url.trim().length > 5 && (
+             <div className="relative w-full p-2 bg-white shadow-sm border border-black/5 mb-6">
+                <img 
+                  src={entry.image_url} 
+                  alt="anı" 
+                  className="w-full h-40 md:h-48 object-cover bg-black/5" 
+                  onError={(e) => e.currentTarget.style.display = 'none'} // Kırık link hatasını gizler
+                />
+             </div>
+           )}
+
+           <div className="flex flex-col gap-3 relative z-10">
+              <span className="text-[9px] text-[#8b7355] font-black tracking-widest uppercase pb-1">
+                 {entry.date}
+              </span>
+              <p className="text-lg md:text-xl text-[#2b2b2b] leading-relaxed" style={{ fontFamily: "'Caveat', 'Comic Sans MS', cursive" }}>
+                {entry.text}
+              </p>
+           </div>
+        </Page>
+      );
+    });
+
+    // 4. YENİ SAYFA EKLEME BUTONU
+    pages.push(
+      <Page key="add-new" number={entries.length + 1}>
+         <button 
+           onPointerDownCapture={(e) => e.stopPropagation()} 
+           onClickCapture={(e) => { e.stopPropagation(); e.preventDefault(); openNewEntryModal(); }}
+           className="w-full h-full flex flex-col items-center justify-center border-2 border-dashed border-[#d4af37]/40 rounded-xl bg-[#d4af37]/5 hover:bg-[#d4af37]/10 cursor-pointer transition-colors group relative z-50 outline-none"
+         >
+            <span className="text-4xl text-[#d4af37] opacity-60 group-hover:scale-110 transition-transform">🖋️</span>
+            <p className="text-[#8b7355] text-[10px] font-bold uppercase tracking-widest mt-4">Deftere Yaz</p>
+         </button>
+      </Page>
+    );
+
+    // 5. DENGELEYİCİ BOŞ SAYFA (Sayfa sayısını çift yapmak için)
+    // Ön Kapak(1) + Ön İç(1) + Anılar(N) + Yeni Ekle(1) + Arka İç(1) + Arka Kapak(1) = N + 5
+    // Eğer N + 5 tek sayıysa, araya 1 boş sayfa atmamız lazım.
+    if ((entries.length + 5) % 2 !== 0) {
+      pages.push(
+        <Page key="filler" number="">
+           <div className="w-full h-full opacity-0"></div>
+        </Page>
+      );
+    }
+
+    // 6. ARKA İÇ KAPAK
+    pages.push(
+      <Page key="cover-inside-back" number="">
+         <div className="w-full h-full flex flex-col items-center justify-center opacity-10 border-2 border-dashed border-black/20 rounded-xl">
+            <span className="text-3xl mb-2">✦</span>
+         </div>
+      </Page>
+    );
+
+    // 7. ARKA KAPAK
+    pages.push(
+      <div key="cover-back" className="page page-cover bg-gradient-to-br from-[#1a1a1a] to-[#0a0a0a] rounded-r-xl shadow-[inset_5px_0_20px_rgba(0,0,0,0.8)] border-r border-[#2b2b2b] overflow-hidden relative">
+      </div>
+    );
+
+    return pages;
+  };
+
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-[#1c1917] flex items-center justify-center text-[#d4af37] font-serif uppercase tracking-widest animate-pulse font-bold">
-        Defter Raftan Alınıyor...
+      <div className="min-h-screen bg-[#121212] flex items-center justify-center text-[#d4af37] text-xs uppercase tracking-widest animate-pulse font-bold">
+        Arşiv Açılıyor...
       </div>
     );
   }
 
   return (
-    <main className="min-h-screen bg-[#1c1917] flex flex-col items-center justify-center p-2 overflow-hidden relative font-serif">
-      <div className="absolute inset-0 opacity-20 pointer-events-none bg-[url('https://www.transparenttextures.com/patterns/wood-pattern.png')]"></div>
+    <main className="min-h-screen bg-[#121212] flex flex-col items-center justify-center p-2 overflow-hidden relative font-sans">
       
-      <Link href="/home" onClick={() => playSound("click")} className="absolute top-5 left-4 z-[100] px-4 py-2 bg-black/50 text-[#f4e4bc] rounded-xl font-bold backdrop-blur-md border border-[#f4e4bc]/20 hover:bg-black/70 transition-colors shadow-lg text-[10px] uppercase tracking-widest">
-        ← Masadan Kalk
+      <Link href="/home" onClick={() => playSound("click")} className="absolute top-6 left-6 z-[100] px-4 py-2 bg-white/5 text-white/50 rounded-lg backdrop-blur-md hover:bg-white/10 hover:text-white transition-colors text-[10px] uppercase tracking-widest border border-white/5">
+        ← Geri
       </Link>
 
-      <div className="relative w-full max-w-4xl flex items-center justify-center mt-12 scale-[0.85] sm:scale-95 md:scale-100">
+      <div className="relative w-full max-w-4xl flex items-center justify-center mt-8 scale-[0.85] sm:scale-95 md:scale-100">
         
         {/* @ts-ignore */}
         <HTMLFlipBook 
@@ -136,93 +225,32 @@ export default function DiaryPage() {
           maxWidth={400}
           minHeight={400}
           maxHeight={550}
-          maxShadowOpacity={0.5}
+          maxShadowOpacity={0.3}
           showCover={true}
           mobileScrollSupport={true}
           usePortrait={true}
-          className="shadow-2xl drop-shadow-[0_20px_50px_rgba(0,0,0,0.8)]"
+          className="shadow-[0_20px_50px_rgba(0,0,0,0.8)]"
         >
-          
-          <div className="page page-cover bg-[#3e2723] rounded-l-lg shadow-[inset_-10px_0_20px_rgba(0,0,0,0.5)] border-l-4 border-[#2b1b18] overflow-hidden relative flex items-center justify-center cursor-pointer">
-             <div className="absolute inset-0 opacity-50 pointer-events-none bg-[url('https://www.transparenttextures.com/patterns/leather.png')]"></div>
-             <div className="relative z-10 w-full flex items-center justify-center">
-                <h1 className="text-7xl md:text-8xl text-[#d4af37] font-black drop-shadow-[0_4px_10px_rgba(0,0,0,0.8)]" style={{ fontFamily: 'Georgia, serif' }}>
-                  E & E
-                </h1>
-             </div>
-          </div>
-
-          {entries.map((entry, index) => (
-            <Page key={entry.id} number={index + 1}>
-               <button
-                 onPointerDownCapture={(e) => e.stopPropagation()} 
-                 onClickCapture={(e) => { e.stopPropagation(); e.preventDefault(); openEditModal(entry); }}
-                 className="absolute top-4 right-4 z-50 w-8 h-8 bg-black/5 hover:bg-black/10 text-black/60 rounded-full flex items-center justify-center transition-colors cursor-pointer border border-black/10"
-                 title="Sayfayı Düzenle"
-               >
-                 ✏️
-               </button>
-
-               {entry.image_url && entry.image_url.trim().length > 5 && (
-                 <div className="relative w-full bg-white p-2 md:p-3 pb-6 md:pb-8 mb-4 shadow-md transform rotate-1 hover:rotate-0 transition-transform duration-300 pointer-events-none mt-2">
-                    <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-16 h-5 bg-white/40 backdrop-blur-sm shadow-sm transform -rotate-2"></div>
-                    <img src={entry.image_url} alt="anı" className="w-full h-36 md:h-44 object-cover bg-black/5" />
-                 </div>
-               )}
-
-               <div className="mt-2 flex flex-col gap-2 relative z-10 pointer-events-none">
-                  <span className="text-[10px] text-red-900/80 font-black tracking-widest uppercase border-b border-black/10 pb-1 inline-block w-max">
-                     {entry.date}
-                  </span>
-                  <p className="text-xl md:text-2xl text-black/80 leading-relaxed font-medium" style={{ fontFamily: "'Caveat', 'Comic Sans MS', cursive" }}>
-                    {entry.text}
-                  </p>
-               </div>
-            </Page>
-          ))}
-
-          <Page number={entries.length + 1}>
-             <button 
-               onPointerDownCapture={(e) => e.stopPropagation()} 
-               onClickCapture={(e) => { e.stopPropagation(); e.preventDefault(); openNewEntryModal(); }}
-               className="w-full h-full flex flex-col items-center justify-center border-2 border-dashed border-red-900/20 rounded-xl bg-black/5 hover:bg-black/10 cursor-pointer transition-colors group relative z-50 outline-none"
-             >
-                <span className="text-4xl md:text-5xl opacity-40 group-hover:opacity-70 group-hover:scale-110 transition-all drop-shadow-sm">🖋️</span>
-                <p className="text-red-900/50 text-[10px] md:text-xs font-bold uppercase tracking-widest mt-4 group-hover:text-red-900/70 transition-colors">Deftere Yaz</p>
-             </button>
-          </Page>
-
-          {needsBlankPage && (
-             <Page number="">
-                <div className="w-full h-full flex items-center justify-center opacity-30 text-[10px] uppercase font-bold text-black">
-                   (Boş Sayfa)
-                </div>
-             </Page>
-          )}
-
-          <div className="page page-cover bg-[#3e2723] rounded-r-lg shadow-[inset_10px_0_20px_rgba(0,0,0,0.5)] border-r-4 border-[#2b1b18] overflow-hidden relative">
-             <div className="absolute inset-0 opacity-50 pointer-events-none bg-[url('https://www.transparenttextures.com/patterns/leather.png')]"></div>
-          </div>
-
+          {renderBookPages()}
         </HTMLFlipBook>
       </div>
 
+      {/* YENİ ANI / DÜZENLEME MODALI (Premium Tasarım) */}
       {isModalOpen && (
-         <div className="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in">
-            <div className="bg-[#f4e4bc] p-6 rounded-2xl max-w-sm w-full shadow-2xl relative border-2 border-[#d4af37]/30 flex flex-col gap-4 pointer-events-auto">
-               <div className="absolute inset-0 opacity-40 mix-blend-multiply pointer-events-none bg-[url('https://www.transparenttextures.com/patterns/aged-paper.png')] rounded-2xl"></div>
+         <div className="fixed inset-0 z-[9999] bg-black/90 backdrop-blur-xl flex items-center justify-center p-4 animate-in fade-in">
+            <div className="bg-[#1a1a1a] p-6 rounded-2xl max-w-sm w-full shadow-2xl relative border border-[#333] flex flex-col gap-4 pointer-events-auto">
                
-               <div className="relative z-10 flex flex-col gap-4">
-                  <h3 className="text-red-900/80 font-black text-sm uppercase tracking-widest border-b border-black/10 pb-2 text-center">
-                    {editingId ? "Sayfayı Düzenle" : "Yeni Sayfa Yaz"}
+               <div className="flex flex-col gap-4">
+                  <h3 className="text-[#d4af37] font-black text-xs uppercase tracking-widest border-b border-[#333] pb-3 text-center">
+                    {editingId ? "Sayfayı Düzenle" : "Yeni Sayfa"}
                   </h3>
                   
                   <input 
                     type="text" 
                     value={draftDate} 
                     onChange={e => setDraftDate(e.target.value)} 
-                    placeholder="Tarih (Örn: 3 Ağustos 2026)"
-                    className="w-full bg-black/5 border border-black/10 text-black/70 p-3 rounded-lg outline-none text-xs font-bold uppercase tracking-widest focus:border-red-900/30"
+                    placeholder="Tarih"
+                    className="w-full bg-[#0a0a0a] border border-[#333] text-white/80 p-3 rounded-lg outline-none text-xs font-bold tracking-wider focus:border-[#d4af37]/50 transition-colors"
                   />
                   
                   <input 
@@ -230,23 +258,23 @@ export default function DiaryPage() {
                     value={draftImage} 
                     onChange={e => setDraftImage(e.target.value)} 
                     placeholder="Fotoğraf Linki (URL) - İsteğe Bağlı"
-                    className="w-full bg-black/5 border border-black/10 text-black/70 p-3 rounded-lg outline-none text-xs focus:border-red-900/30"
+                    className="w-full bg-[#0a0a0a] border border-[#333] text-white/80 p-3 rounded-lg outline-none text-xs focus:border-[#d4af37]/50 transition-colors"
                   />
 
                   <textarea 
                     value={draftText} 
                     onChange={e => setDraftText(e.target.value)} 
-                    placeholder="Bu sayfaya ne yazmak istersin..."
-                    className="w-full h-32 bg-black/5 border border-black/10 text-black/80 p-3 rounded-lg outline-none resize-none text-lg leading-relaxed focus:border-red-900/30"
+                    placeholder="Yazmaya başla..."
+                    className="w-full h-32 bg-[#0a0a0a] border border-[#333] text-white/90 p-4 rounded-lg outline-none resize-none text-lg leading-relaxed focus:border-[#d4af37]/50 transition-colors"
                     style={{ fontFamily: "'Caveat', 'Comic Sans MS', cursive" }}
                   />
 
-                  <div className="flex gap-2 mt-2">
+                  <div className="flex gap-2 mt-4">
                      {editingId && (
-                        <button onClick={handleDelete} className="py-3 px-4 bg-red-900 text-white rounded-lg text-[10px] font-black uppercase tracking-widest shadow-md hover:bg-red-800 transition-colors">Sil</button>
+                        <button onClick={handleDelete} className="py-3 px-4 bg-red-900/40 text-red-400 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-red-900/60 transition-colors border border-red-900/50">Sil</button>
                      )}
-                     <button onClick={() => setIsModalOpen(false)} className="flex-1 py-3 bg-black/10 text-black/60 rounded-lg text-[10px] font-bold uppercase tracking-widest hover:bg-black/20 transition-colors">İptal</button>
-                     <button onClick={handleSave} className="flex-1 py-3 bg-[#d4af37] text-black rounded-lg text-[10px] font-black uppercase tracking-widest shadow-md hover:bg-[#c4a133] transition-colors">Kaydet 🖋️</button>
+                     <button onClick={() => setIsModalOpen(false)} className="flex-1 py-3 bg-white/5 text-white/60 rounded-lg text-[10px] font-bold uppercase tracking-widest hover:bg-white/10 transition-colors">İptal</button>
+                     <button onClick={handleSave} className="flex-1 py-3 bg-[#d4af37] text-black rounded-lg text-[10px] font-black uppercase tracking-widest shadow-md hover:bg-[#c4a133] transition-colors">Kaydet</button>
                   </div>
                </div>
             </div>
