@@ -86,12 +86,23 @@ export default function DiaryPage() {
     playSound("success");
     setIsModalOpen(false);
 
+    // Mevcut sayfa numarasını hafızaya al
+    const currentPage = bookRef.current?.pageFlip()?.getCurrentPageIndex() || 0;
+
     if (editingId) {
       await supabase.from('diary_entries').update({ date: draftDate, text: draftText, image_url: draftImage }).eq('id', editingId);
     } else {
       await supabase.from('diary_entries').insert([{ date: draftDate, text: draftText, image_url: draftImage }]);
     }
-    fetchEntries();
+    
+    await fetchEntries();
+
+    // İşlem bitince kaldığı sayfaya geri döndür
+    setTimeout(() => {
+      try {
+        bookRef.current?.pageFlip()?.turnToPage(currentPage);
+      } catch (e) {}
+    }, 100);
   };
 
   const handleDelete = async () => {
@@ -99,8 +110,16 @@ export default function DiaryPage() {
     playSound("over");
     setIsModalOpen(false);
 
+    const currentPage = bookRef.current?.pageFlip()?.getCurrentPageIndex() || 0;
+
     await supabase.from('diary_entries').delete().eq('id', editingId);
-    fetchEntries();
+    await fetchEntries();
+
+    setTimeout(() => {
+      try {
+        bookRef.current?.pageFlip()?.turnToPage(Math.max(0, currentPage - 1));
+      } catch (e) {}
+    }, 100);
   };
 
   const stopEvent = (e: any) => {
@@ -126,7 +145,7 @@ export default function DiaryPage() {
 
       <div className="relative w-full max-w-4xl flex items-center justify-center scale-90 md:scale-100 mt-8">
         
-        {/* @ts-ignore - Key propu sayesinde veri değişiminde çökme ve başa atma hatası kökten çözüldü */}
+        {/* @ts-ignore */}
         <HTMLFlipBook 
           key={`book-${entries.length}`}
           ref={bookRef}
@@ -143,12 +162,12 @@ export default function DiaryPage() {
           className="shadow-2xl drop-shadow-[0_20px_50px_rgba(0,0,0,0.8)]"
         >
           
-          {/* 📓 1. KAPAK (Tam Ortalanmış, Dolgun ve Şık Tasarım) */}
+          {/* 📓 1. KAPAK (Bıçak Gibi Tam Ortada) */}
           <div className="page page-cover bg-[#3e2723] rounded-l-lg shadow-[inset_-10px_0_20px_rgba(0,0,0,0.5)] border-l-4 border-[#2b1b18] overflow-hidden relative flex flex-col items-center justify-center cursor-pointer">
              <div className="absolute inset-0 opacity-50 pointer-events-none bg-[url('https://www.transparenttextures.com/patterns/leather.png')]"></div>
              
-             {/* Tam Merkezde Dolgun Görünüm */}
-             <div className="relative z-10 flex flex-col items-center justify-center p-8 text-center gap-3">
+             {/* Tam Merkez Tasarımı */}
+             <div className="absolute inset-0 flex flex-col items-center justify-center p-8 text-center gap-3">
                 <h1 className="text-5xl md:text-6xl text-[#d4af37] font-black tracking-widest drop-shadow-[0_2px_6px_rgba(0,0,0,0.9)]" style={{ fontFamily: 'Georgia, serif' }}>
                   E & E
                 </h1>
@@ -157,7 +176,7 @@ export default function DiaryPage() {
              </div>
           </div>
 
-          {/* 📄 İLK SAYFA (Mülkiyet: Emircan & Efsun) */}
+          {/* 📄 İLK SAYFA (Mülkiyet) */}
           <Page number="1">
              <div className="w-full h-full flex flex-col items-center justify-center text-center">
                 <h2 className="text-3xl md:text-4xl font-black text-black/80 mb-3" style={{ fontFamily: 'Georgia, serif' }}>
