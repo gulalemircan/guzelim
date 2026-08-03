@@ -1,4 +1,3 @@
-// components/Navbar.tsx
 "use client";
 import { useState, useEffect } from "react";
 import Link from "next/link";
@@ -42,14 +41,15 @@ export default function Navbar() {
 
   const { name: themeName, icon: themeIcon } = getThemeInfo();
 
-  // YENİ SAYFAMIZ BURAYA EKLENDİ 🚀
+  // components/Navbar.tsx (İlgili kısım)
   const navLinks = [
     { name: "Ana Sayfa", href: "/home", icon: "🏠" },
     { name: "Oyun Odası", href: "/games", icon: "🎮" },
-    { name: "Kozmik Oda", href: "/trip-odasi", icon: "🌌" }, 
+    { name: "Kozmik Oda", href: "/trip-odasi", icon: "🌌" },
     { name: "Sanal Gardırop", href: "/princess", icon: "👗" }, 
     { name: "Rotamız", href: "/memories", icon: "🗺️" }, 
-    { name: "Günlük", href: "/gunluk", icon: "📔" }, // İSİM, İKON VE LİNK DEĞİŞTİ
+    { name: "Anılar & Planlar", href: "/moments", icon: "📝" },
+    { name: "Anı Defteri", href: "/gunluk", icon: "📖" },
   ];
 
   return (
