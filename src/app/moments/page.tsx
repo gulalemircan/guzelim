@@ -4,7 +4,15 @@ import { supabase } from "@/lib/supabaseClient";
 import { playSound } from "@/utils/audio";
 
 type ListItem = { id: number; text: string; completed: boolean };
-type PhotoItem = { id: number; url: string; note: string };
+type PhotoItem = { 
+  id: number; 
+  url: string; 
+  note: string;
+  rotation?: number;
+  scale?: number;
+  position_x?: number;
+  position_y?: number;
+};
 
 export default function MomentsPage() {
   const [watchList, setWatchList] = useState<ListItem[]>([]);
@@ -18,6 +26,9 @@ export default function MomentsPage() {
 
   const [editingItem, setEditingItem] = useState<{ id: number; type: 'watch' | 'todo'; text: string } | null>(null);
   const [confirmModal, setConfirmModal] = useState<{ isOpen: boolean; type: 'watch' | 'todo' | 'photo'; id: number | null }>({ isOpen: false, type: 'watch', id: null });
+
+  // Fotoğraf Düzenleme Modalı State'leri
+  const [photoCropModal, setPhotoCropModal] = useState<PhotoItem | null>(null);
 
   useEffect(() => {
     fetchData();
@@ -104,9 +115,18 @@ export default function MomentsPage() {
         if (event.target?.result) {
           playSound("photo_add"); 
           const tempPhotoUrl = event.target.result as string;
+          const newPhoto = { 
+            id: Date.now(), 
+            url: tempPhotoUrl, 
+            note: "", 
+            rotation: 0, 
+            scale: 1, 
+            position_x: 0, 
+            position_y: 0 
+          };
           
-          setPhotos(prev => [...prev, { id: Date.now(), url: tempPhotoUrl, note: "" }]);
-          await supabase.from('photos').insert([{ url: tempPhotoUrl, note: "" }]);
+          setPhotos(prev => [...prev, newPhoto]);
+          await supabase.from('photos').insert([newPhoto]);
         }
       };
       reader.readAsDataURL(e.target.files[0]);
@@ -119,6 +139,23 @@ export default function MomentsPage() {
 
   const savePhotoNote = async (id: number, note: string) => {
     await supabase.from('photos').update({ note }).eq('id', id);
+  };
+
+  // Fotoğraf Yön ve Pozisyon Kaydı
+  const savePhotoTransform = async () => {
+    if (!photoCropModal) return;
+    playSound("success");
+
+    const updated = {
+      rotation: photoCropModal.rotation || 0,
+      scale: photoCropModal.scale || 1,
+      position_x: photoCropModal.position_x || 0,
+      position_y: photoCropModal.position_y || 0
+    };
+
+    setPhotos(photos.map(p => p.id === photoCropModal.id ? { ...p, ...updated } : p));
+    await supabase.from('photos').update(updated).eq('id', photoCropModal.id);
+    setPhotoCropModal(null);
   };
 
   const renderList = (items: ListItem[], type: 'watch' | 'todo') => (
@@ -243,13 +280,14 @@ export default function MomentsPage() {
 
         </div>
 
+        {/* 📸 FOTOĞRAF GALERİSİ */}
         <div className="bg-card border border-primary/20 rounded-[32px] p-6 md:p-8 shadow-xl mt-4">
           <div className="flex flex-col md:flex-row items-center justify-between mb-8 border-b border-primary/10 pb-4">
             <div className="text-center md:text-left mb-4 md:mb-0">
               <h3 className="text-primary text-sm font-bold tracking-[2px] uppercase flex items-center justify-center md:justify-start gap-2">
                 <span>📸</span> Anı Galerisi
               </h3>
-              <p className="text-xs text-text/50 mt-1">En güzel anlarımızı buraya ekle, altına notunu düş.</p>
+              <p className="text-xs text-text/50 mt-1">En güzel anlarımızı buraya ekle, yönünü ve hizasını ayarla.</p>
             </div>
             
             <input 
@@ -277,16 +315,34 @@ export default function MomentsPage() {
               {photos.map(photo => (
                 <div key={photo.id} className="bg-background border border-primary/20 rounded-2xl p-4 flex flex-col group relative shadow-md hover:shadow-xl transition-all">
                   
-                  <button 
-                    onClick={() => setConfirmModal({ isOpen: true, type: 'photo', id: photo.id })}
-                    className="absolute top-6 right-6 w-8 h-8 bg-red-500/90 text-white rounded-full flex items-center justify-center opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity z-10 hover:bg-red-600 shadow-lg"
-                    title="Fotoğrafı Sil"
-                  >
-                    ✕
-                  </button>
+                  {/* Üst Butonlar (Sil & Düzenle) */}
+                  <div className="absolute top-6 right-6 flex gap-2 z-20">
+                    <button 
+                      onClick={() => setPhotoCropModal(photo)}
+                      className="w-8 h-8 bg-primary/90 text-background rounded-full flex items-center justify-center transition-opacity hover:scale-110 shadow-lg text-xs font-bold"
+                      title="Yön/Kırpma Ayarla"
+                    >
+                      ⚙️
+                    </button>
+                    <button 
+                      onClick={() => setConfirmModal({ isOpen: true, type: 'photo', id: photo.id })}
+                      className="w-8 h-8 bg-red-500/90 text-white rounded-full flex items-center justify-center transition-opacity hover:bg-red-600 shadow-lg text-xs font-bold"
+                      title="Fotoğrafı Sil"
+                    >
+                      ✕
+                    </button>
+                  </div>
 
+                  {/* Fotoğraf Çerçevesi (Ayarlanmış Pozisyon ile) */}
                   <div className="w-full h-48 md:h-64 bg-card rounded-xl overflow-hidden mb-4 relative">
-                    <img src={photo.url} alt="Anı" className="w-full h-full object-cover hover:scale-105 transition-transform duration-500" />
+                    <img 
+                      src={photo.url} 
+                      alt="Anı" 
+                      className="w-full h-full object-cover transition-transform duration-300" 
+                      style={{
+                        transform: `rotate(${photo.rotation || 0}deg) scale(${photo.scale || 1}) translate(${photo.position_x || 0}px, ${photo.position_y || 0}px)`
+                      }}
+                    />
                   </div>
                   
                   <textarea 
@@ -294,7 +350,7 @@ export default function MomentsPage() {
                     onChange={(e) => updatePhotoNoteLocal(photo.id, e.target.value)}
                     onBlur={(e) => savePhotoNote(photo.id, e.target.value)}
                     placeholder="Bu fotoğrafın altına bir not düş..."
-                    className="w-full bg-transparent border border-primary/10 rounded-xl p-3 text-sm text-text outline-none focus:border-primary/50 resize-none h-20 transition-colors placeholder:text-text/40"
+                    className="w-full bg-transparent border border-primary/10 rounded-xl p-3 text-sm text-text outline-none focus:border-primary/50 resize-none h-20 transition-colors placeholder:text-text/40 font-medium"
                   />
                 </div>
               ))}
@@ -303,6 +359,113 @@ export default function MomentsPage() {
         </div>
       </div>
 
+      {/* ⚙️ FOTOĞRAF DÖNDÜRME & HİZALAMA MODALI */}
+      {photoCropModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[9999] flex items-center justify-center p-4">
+          <div className="bg-card border border-primary/30 p-6 rounded-[32px] max-w-md w-full shadow-2xl flex flex-col gap-5 animate-in zoom-in-95">
+            <h3 className="text-primary font-bold text-center uppercase tracking-widest text-xs border-b border-primary/10 pb-3">
+              Fotoğraf Açı ve Konum Ayarı
+            </h3>
+
+            {/* Önizleme Penceresi */}
+            <div className="w-full h-64 bg-background border border-primary/20 rounded-2xl overflow-hidden relative flex items-center justify-center">
+              <img 
+                src={photoCropModal.url} 
+                alt="Düzenleme" 
+                className="w-full h-full object-cover transition-transform duration-200"
+                style={{
+                  transform: `rotate(${photoCropModal.rotation || 0}deg) scale(${photoCropModal.scale || 1}) translate(${photoCropModal.position_x || 0}px, ${photoCropModal.position_y || 0}px)`
+                }}
+              />
+            </div>
+
+            {/* Kontrol Butonları */}
+            <div className="flex flex-col gap-4">
+              
+              {/* Döndürme */}
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-bold text-text/70">Yön:</span>
+                <div className="flex gap-2">
+                  <button 
+                    onClick={() => setPhotoCropModal({ ...photoCropModal, rotation: ((photoCropModal.rotation || 0) - 90) % 360 })}
+                    className="px-3 py-1.5 bg-primary/10 border border-primary/20 rounded-lg text-xs font-bold text-primary hover:bg-primary/20"
+                  >
+                    ↺ 90° Sola
+                  </button>
+                  <button 
+                    onClick={() => setPhotoCropModal({ ...photoCropModal, rotation: ((photoCropModal.rotation || 0) + 90) % 360 })}
+                    className="px-3 py-1.5 bg-primary/10 border border-primary/20 rounded-lg text-xs font-bold text-primary hover:bg-primary/20"
+                  >
+                    ↻ 90° Sağa
+                  </button>
+                </div>
+              </div>
+
+              {/* Büyütme (Zoom) */}
+              <div className="flex flex-col gap-1">
+                <div className="flex justify-between text-xs font-bold text-text/70">
+                  <span>Büyüt / Küçült (Zoom):</span>
+                  <span>{Math.round((photoCropModal.scale || 1) * 100)}%</span>
+                </div>
+                <input 
+                  type="range" 
+                  min="0.5" 
+                  max="2.5" 
+                  step="0.1" 
+                  value={photoCropModal.scale || 1}
+                  onChange={(e) => setPhotoCropModal({ ...photoCropModal, scale: parseFloat(e.target.value) })}
+                  className="w-full accent-primary cursor-pointer"
+                />
+              </div>
+
+              {/* Yatay ve Dikey Kaydırma */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1">
+                  <span className="text-[10px] font-bold text-text/60">Yatay Konum (X):</span>
+                  <input 
+                    type="range" 
+                    min="-100" 
+                    max="100" 
+                    value={photoCropModal.position_x || 0}
+                    onChange={(e) => setPhotoCropModal({ ...photoCropModal, position_x: parseInt(e.target.value) })}
+                    className="w-full accent-primary cursor-pointer"
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <span className="text-[10px] font-bold text-text/60">Dikey Konum (Y):</span>
+                  <input 
+                    type="range" 
+                    min="-100" 
+                    max="100" 
+                    value={photoCropModal.position_y || 0}
+                    onChange={(e) => setPhotoCropModal({ ...photoCropModal, position_y: parseInt(e.target.value) })}
+                    className="w-full accent-primary cursor-pointer"
+                  />
+                </div>
+              </div>
+
+            </div>
+
+            {/* Modal Butonları */}
+            <div className="flex gap-2 mt-2">
+              <button 
+                onClick={() => setPhotoCropModal(null)}
+                className="flex-1 py-3 bg-primary/10 text-text/70 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-primary/20 transition-colors"
+              >
+                Vazgeç
+              </button>
+              <button 
+                onClick={savePhotoTransform}
+                className="flex-1 py-3 bg-primary text-background rounded-xl text-xs font-black uppercase tracking-widest shadow-lg hover:scale-105 transition-transform"
+              >
+                Açıyı Kaydet ⚙️
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ⚠️ SİLME ONAY MODALI */}
       {confirmModal.isOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-card border border-primary/30 p-8 rounded-[32px] max-w-sm w-full text-center shadow-2xl animate-in zoom-in-95 duration-200">
